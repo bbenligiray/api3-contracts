@@ -8,7 +8,7 @@ interface IHashRegistry is IOwnable {
 
     event RegisteredHash(
         bytes32 indexed hashType,
-        bytes32 hash,
+        bytes32 value,
         uint256 timestamp
     );
 
@@ -16,7 +16,7 @@ interface IHashRegistry is IOwnable {
 
     function registerHash(
         bytes32 hashType,
-        bytes32 hash,
+        bytes32 value,
         uint256 timestamp,
         bytes[] calldata signatures
     ) external;
