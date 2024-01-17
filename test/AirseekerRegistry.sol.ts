@@ -2,31 +2,7 @@ import * as helpers from '@nomicfoundation/hardhat-network-helpers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
 
-function deriveTemplateId(oisTitle, feedName) {
-  const endpointId = ethers.solidityPackedKeccak256(['string', 'string'], [oisTitle, 'feed']);
-  // Parameters encoded in Airnode ABI
-  // https://docs.api3.org/reference/airnode/latest/specifications/airnode-abi.html
-  return ethers.solidityPackedKeccak256(
-    ['bytes32', 'bytes'],
-    [
-      endpointId,
-      ethers.AbiCoder.defaultAbiCoder().encode(
-        ['bytes32', 'bytes32', 'bytes32'],
-        [ethers.encodeBytes32String('1b'), ethers.encodeBytes32String('name'), ethers.encodeBytes32String(feedName)]
-      ),
-    ]
-  );
-}
-
-function deriveBeaconId(airnodeAddress, templateId) {
-  return ethers.solidityPackedKeccak256(['address', 'bytes32'], [airnodeAddress, templateId]);
-}
-
-function deriveBeaconSetId(beaconIds) {
-  return ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(['bytes32[]'], [beaconIds]));
-}
-
-async function updateBeaconSet(api3ServerV1, feedName, airnodes, timestamp, value) {
+export async function updateBeaconSet(api3ServerV1, feedName, airnodes, timestamp, value) {
   const encodedValue = ethers.AbiCoder.defaultAbiCoder().encode(['int224'], [value]);
   const beaconUpdateData = airnodes.map((airnode) => {
     const templateId = deriveTemplateId(`OIS title of Airnode with address ${airnode.address}`, feedName);
@@ -58,7 +34,7 @@ async function updateBeaconSet(api3ServerV1, feedName, airnodes, timestamp, valu
   };
 }
 
-async function readBeacons(api3ServerV1, beaconIds) {
+export async function readBeacons(api3ServerV1, beaconIds) {
   const returndata = await api3ServerV1.multicall.staticCall(
     beaconIds.map((beaconId) => api3ServerV1.interface.encodeFunctionData('dataFeeds', [beaconId]))
   );
@@ -67,6 +43,37 @@ async function readBeacons(api3ServerV1, beaconIds) {
     .map((decodedReturnData) => {
       return { value: decodedReturnData[0], timestamp: decodedReturnData[1] };
     });
+}
+
+export function encodeUpdateParameters(deviationThreshold, deviationReference, heartbearInterval) {
+  return ethers.AbiCoder.defaultAbiCoder().encode(
+    ['uint256', 'int224', 'uint256'],
+    [deviationThreshold, deviationReference, heartbearInterval]
+  );
+}
+
+function deriveTemplateId(oisTitle, feedName) {
+  const endpointId = ethers.solidityPackedKeccak256(['string', 'string'], [oisTitle, 'feed']);
+  // Parameters encoded in Airnode ABI
+  // https://docs.api3.org/reference/airnode/latest/specifications/airnode-abi.html
+  return ethers.solidityPackedKeccak256(
+    ['bytes32', 'bytes'],
+    [
+      endpointId,
+      ethers.AbiCoder.defaultAbiCoder().encode(
+        ['bytes32', 'bytes32', 'bytes32'],
+        [ethers.encodeBytes32String('1b'), ethers.encodeBytes32String('name'), ethers.encodeBytes32String(feedName)]
+      ),
+    ]
+  );
+}
+
+function deriveBeaconId(airnodeAddress, templateId) {
+  return ethers.solidityPackedKeccak256(['address', 'bytes32'], [airnodeAddress, templateId]);
+}
+
+function deriveBeaconSetId(beaconIds) {
+  return ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(['bytes32[]'], [beaconIds]));
 }
 
 async function registerBeaconSet(airseekerRegistry, feedName, airnodes) {
@@ -86,13 +93,6 @@ async function registerBeaconSet(airseekerRegistry, feedName, airnodes) {
   );
   await airseekerRegistry.registerDataFeed(dataFeedDetails);
   return dataFeedDetails;
-}
-
-function encodeUpdateParameters(deviationThreshold, deviationReference, heartbearInterval) {
-  return ethers.AbiCoder.defaultAbiCoder().encode(
-    ['uint256', 'int224', 'uint256'],
-    [deviationThreshold, deviationReference, heartbearInterval]
-  );
 }
 
 describe('AirseekerRegistry', function () {
