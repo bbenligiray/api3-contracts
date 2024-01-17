@@ -141,17 +141,10 @@ describe('Api3Market', function () {
     );
     const mockContractWithNoDefaultPayable = await MockContractWithNoDefaultPayable.deploy();
 
-    /*
     const dapiCount = 150;
     const chainCount = 20;
     const updateParametersVarietyCount = 4;
     const apiProviderCount = 15;
-    */
-
-    const dapiCount = 10;
-    const chainCount = 10;
-    const updateParametersVarietyCount = 3;
-    const apiProviderCount = 10;
 
     const hashTimestamp = await helpers.time.latest();
     // Normally, a dAPI management Merkle tree should have a single leaf per
