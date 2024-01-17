@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["esnext"],
+    "module": "Node16",
+    "esModuleInterop": true,
+    "moduleResolution": "Node16",
+    "strict": true,
+    "target": "esnext",
+    "skipLibCheck": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitReturns": true,
+    "resolveJsonModule": true,
+
+    // Disabled because they are covered by Eslint rules
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+
+    // Disabled because prefer the property syntax
+    "noPropertyAccessFromIndexSignature": false,
+  },
+  "exclude": ["coverage/**/*", "dist/**/*", "node_modules/**/*"],
+  "include": [
+    "**/*",
+    // Files/folders starting with "." are ignored by glob patters and need to be included explicitly. See:
+    // https://github.com/microsoft/TypeScript/issues/13399#issuecomment-271939777
+    ".eslintrc.js",
+  ],
+}
