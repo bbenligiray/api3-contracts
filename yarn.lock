@@ -12,6 +12,13 @@
   resolved "https://registry.yarnpkg.com/@adraffy/ens-normalize/-/ens-normalize-1.10.0.tgz#d2a39395c587e092d77cbbc80acf956a54f38bf7"
   integrity sha512-nA9XHtlAkYfJxY7bce8DcN7eKxWWCWkU+1GR9d+U6MbNpfwQp8TI7vqOsBsMcHoT4mBu2kypKoSKnghEzOOq5Q==
 
+"@api3/airnode-protocol-v1@^3.1.0":
+  version "3.1.0"
+  resolved "https://registry.yarnpkg.com/@api3/airnode-protocol-v1/-/airnode-protocol-v1-3.1.0.tgz#b4cfe0a0321f51326e959d7201a8094454fc2cbc"
+  integrity sha512-3XOYdQqQPWXC2xSz1cCnk6kzkeugE6NdxgU25C43dzkJStvY+jALyxmS9SBtsUCaq4KA7hYVxci5gkDi7rZbAQ==
+  dependencies:
+    "@openzeppelin/contracts" "4.8.2"
+
 "@api3/commons@^0.6.0":
   version "0.6.0"
   resolved "https://registry.yarnpkg.com/@api3/commons/-/commons-0.6.0.tgz#dc578609f35e4d114766ba9b4b94666889b7e152"
@@ -892,6 +899,16 @@
     "@nomicfoundation/solidity-analyzer-win32-arm64-msvc" "0.1.1"
     "@nomicfoundation/solidity-analyzer-win32-ia32-msvc" "0.1.1"
     "@nomicfoundation/solidity-analyzer-win32-x64-msvc" "0.1.1"
+
+"@openzeppelin/contracts@4.8.2":
+  version "4.8.2"
+  resolved "https://registry.yarnpkg.com/@openzeppelin/contracts/-/contracts-4.8.2.tgz#d815ade0027b50beb9bcca67143c6bcc3e3923d6"
+  integrity sha512-kEUOgPQszC0fSYWpbh2kT94ltOJwj1qfT2DWo+zVttmGmf97JZ99LspePNaeeaLhCImaHVeBbjaQFZQn7+Zc5g==
+
+"@openzeppelin/contracts@4.9.5":
+  version "4.9.5"
+  resolved "https://registry.yarnpkg.com/@openzeppelin/contracts/-/contracts-4.9.5.tgz#1eed23d4844c861a1835b5d33507c1017fa98de8"
+  integrity sha512-ZK+W5mVhRppff9BE6YdR8CC52C8zAvsVAiWhEtQ5+oNxFE6h1WdeWo+FJSF8KKvtxxVYZ7MTP/5KoVpAU3aSWg==
 
 "@pnpm/config.env-replace@^1.1.0":
   version "1.1.0"
