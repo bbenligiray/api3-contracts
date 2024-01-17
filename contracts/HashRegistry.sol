@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "./vendor/@openzeppelin/contracts@4.9.5/access/Ownable.sol";
 import "./interfaces/IHashRegistry.sol";
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "./vendor/@openzeppelin/contracts@4.9.5/utils/cryptography/ECDSA.sol";
 
 contract HashRegistry is Ownable, IHashRegistry {
     using ECDSA for bytes32;

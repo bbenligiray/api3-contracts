@@ -1,13 +1,24 @@
-# Sample Hardhat Project
+# api3-contracts
 
-This project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, and a script that deploys that contract.
+Install the dependencies and build
 
-Try running some of the following tasks:
+```sh
+pnpm install
+```
 
-```shell
-npx hardhat help
-npx hardhat test
-REPORT_GAS=true npx hardhat test
-npx hardhat node
-npx hardhat run scripts/deploy.ts
+Test the contracts, get test coverage and gas reports
+
+```sh
+yarn test
+# Outputs to `./coverage`
+yarn test:coverage
+# Outputs to `.gas_report`
+yarn test:gas
+```
+
+Verify that the vendor contracts are identical to the ones from their respective packages.
+You will need to run this with Node.js 20, and have `wget` and `tar` on your system.
+
+```sh
+pnpm verify-vendor-contracts
 ```

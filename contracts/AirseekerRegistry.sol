@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "./vendor/@openzeppelin/contracts@4.9.5/access/Ownable.sol";
 import "@api3/airnode-protocol-v1/contracts/utils/ExtendedSelfMulticall.sol";
 import "./interfaces/IAirseekerRegistry.sol";
-import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import "./vendor/@openzeppelin/contracts@4.9.5/utils/structs/EnumerableSet.sol";
 import "@api3/airnode-protocol-v1/contracts/api3-server-v1/interfaces/IApi3ServerV1.sol";
 
 contract AirseekerRegistry is

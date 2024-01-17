@@ -1,18 +1,22 @@
 {
   "name": "api3-contracts",
   "version": "1.0.0",
+  "engines": {
+    "node": "^20.11.0"
+  },
   "description": "",
   "main": "index.js",
   "scripts": {
     "build": "hardhat compile",
-    "lint": "yarn run prettier:check && yarn run lint:eslint && yarn run lint:solhint",
+    "lint": "pnpm run prettier:check && pnpm run lint:eslint && pnpm run lint:solhint",
     "lint:solhint": "solhint ./contracts/**/*.sol",
     "lint:eslint": "eslint . --ext .js,.ts",
     "prettier:check": "prettier --check \"./**/*.{js,ts,md,json,sol}\"",
     "prettier": "prettier --write \"./**/*.{js,ts,md,json,sol}\"",
     "test": "hardhat test --parallel",
     "test:coverage": "hardhat coverage",
-    "test:gas": "REPORT_GAS=TRUE hardhat test"
+    "test:gas": "REPORT_GAS=TRUE hardhat test",
+    "verify-vendor-contracts": "hardhat run scripts/verify-vendor-contracts.ts"
   },
   "keywords": [],
   "author": "",
@@ -25,7 +29,6 @@
     "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
     "@nomicfoundation/hardhat-verify": "^2.0.0",
-    "@openzeppelin/contracts": "4.9.5",
     "@openzeppelin/merkle-tree": "^1.0.5",
     "@typechain/ethers-v6": "^0.5.0",
     "@typechain/hardhat": "^9.0.0",
