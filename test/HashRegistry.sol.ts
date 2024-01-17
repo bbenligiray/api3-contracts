@@ -20,10 +20,10 @@ describe('HashRegistry', function () {
     const roles = roleNames.reduce((acc, roleName, index) => {
       return { ...acc, [roleName]: accounts[index] };
     }, {});
-    const sortedHashTypeASigners = [1, 2, 3]
+    const sortedHashTypeASigners = Array.from({ length: 3 })
       .map(() => ethers.Wallet.createRandom())
       .sort((a, b) => (BigInt(a.address) > BigInt(b.address) ? 1 : -1));
-    const sortedHashTypeBSigners = [1, 2]
+    const sortedHashTypeBSigners = Array.from({ length: 2 })
       .map(() => ethers.Wallet.createRandom())
       .sort((a, b) => (BigInt(a.address) > BigInt(b.address) ? 1 : -1));
 
