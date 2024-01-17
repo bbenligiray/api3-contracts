@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.17;
+pragma solidity ^0.8.0;
 
+import "./IOwnable.sol";
 import "@api3/airnode-protocol-v1/contracts/utils/interfaces/IExtendedSelfMulticall.sol";
 
-interface IAirseekerRegistry is IExtendedSelfMulticall {
+interface IAirseekerRegistry is IOwnable, IExtendedSelfMulticall {
     event ActivatedDataFeedId(bytes32 indexed dataFeedId);
 
     event ActivatedDapiName(bytes32 indexed dapiName);

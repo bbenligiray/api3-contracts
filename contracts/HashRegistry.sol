@@ -21,6 +21,28 @@ contract HashRegistry is Ownable, IHashRegistry {
         transferOwnership(owner_);
     }
 
+    function owner()
+        public
+        view
+        virtual
+        override(IOwnable, Ownable)
+        returns (address)
+    {
+        return super.owner();
+    }
+
+    // Disabled ownership renouncing and transfers to enable this to be
+    // deployed deterministically
+    function renounceOwnership() public virtual override(IOwnable, Ownable) {
+        super.renounceOwnership();
+    }
+
+    function transferOwnership(
+        address newOwner
+    ) public virtual override(IOwnable, Ownable) {
+        super.transferOwnership(newOwner);
+    }
+
     function setSigners(
         bytes32 hashType,
         address[] calldata signers

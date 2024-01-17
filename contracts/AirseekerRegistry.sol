@@ -64,13 +64,19 @@ contract AirseekerRegistry is
         api3ServerV1 = api3ServerV1_;
     }
 
+    function owner() public view override(IOwnable, Ownable) returns (address) {
+        return super.owner();
+    }
+
     // Disabled ownership renouncing and transfers to enable this to be
     // deployed deterministically
-    function renounceOwnership() public virtual override {
+    function renounceOwnership() public pure override(IOwnable, Ownable) {
         revert("Ownership cannot be renounced");
     }
 
-    function transferOwnership(address) public virtual override {
+    function transferOwnership(
+        address
+    ) public pure override(IOwnable, Ownable) {
         revert("Ownership cannot be transferred");
     }
 
