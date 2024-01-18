@@ -471,6 +471,24 @@ describe('Api3Market', function () {
     });
   });
 
+  describe('renounceOwnership', function () {
+    it('reverts', async function () {
+      const { roles, api3Market } = await helpers.loadFixture(deploy);
+      await expect(api3Market.connect(roles.owner).renounceOwnership()).to.be.revertedWith(
+        'Ownership cannot be renounced'
+      );
+    });
+  });
+
+  describe('transferOwnership', function () {
+    it('reverts', async function () {
+      const { roles, api3Market } = await helpers.loadFixture(deploy);
+      await expect(api3Market.connect(roles.owner).transferOwnership(roles.randomPerson.address)).to.be.revertedWith(
+        'Ownership cannot be transferred'
+      );
+    });
+  });
+
   describe('buySubscription', function () {
     context('Arguments are valid', function () {
       context('New subscription can be added to the queue', function () {

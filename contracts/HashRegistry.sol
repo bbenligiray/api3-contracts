@@ -32,7 +32,8 @@ contract HashRegistry is Ownable, IHashRegistry {
 
     /// @param owner_ Owner address
     constructor(address owner_) {
-        transferOwnership(owner_);
+        require(owner_ != address(0), "Owner address zero");
+        _transferOwnership(owner_);
     }
 
     /// @notice Returns the owner address
@@ -49,7 +50,7 @@ contract HashRegistry is Ownable, IHashRegistry {
 
     /// @notice Overriden to be disabled
     function renounceOwnership() public virtual override(Ownable, IOwnable) {
-        revert("Ownership cannot be renounced");
+        return super.renounceOwnership();
     }
 
     /// @notice Transfers the ownership of the contract
@@ -57,7 +58,7 @@ contract HashRegistry is Ownable, IHashRegistry {
     function transferOwnership(
         address newOwner
     ) public virtual override(Ownable, IOwnable) {
-        super.transferOwnership(newOwner);
+        return super.transferOwnership(newOwner);
     }
 
     /// @notice Called by the contract owner to set signers for a hash type.

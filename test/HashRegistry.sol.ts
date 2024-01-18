@@ -63,18 +63,34 @@ describe('HashRegistry', function () {
   }
 
   describe('constructor', function () {
-    it('constructs', async function () {
-      const { roles, hashRegistry } = await helpers.loadFixture(deploy);
-      expect(await hashRegistry.owner()).to.equal(roles.owner.address);
+    context('Owner address is not zero', function () {
+      it('constructs', async function () {
+        const { roles } = await helpers.loadFixture(deploy);
+        const HashRegistry = await ethers.getContractFactory('HashRegistry', roles.deployer);
+        await expect(HashRegistry.deploy(ethers.ZeroAddress)).to.be.revertedWith('Owner address zero');
+      });
+    });
+    context('Owner address is not zero', function () {
+      it('reverts', async function () {
+        const { roles, hashRegistry } = await helpers.loadFixture(deploy);
+        expect(await hashRegistry.owner()).to.equal(roles.owner.address);
+      });
     });
   });
 
   describe('renounceOwnership', function () {
-    it('reverts', async function () {
+    it('renounces ownership', async function () {
       const { roles, hashRegistry } = await helpers.loadFixture(deploy);
-      await expect(hashRegistry.connect(roles.owner).renounceOwnership()).to.be.revertedWith(
-        'Ownership cannot be renounced'
-      );
+      await hashRegistry.connect(roles.owner).renounceOwnership();
+      expect(await hashRegistry.owner()).to.equal(ethers.ZeroAddress);
+    });
+  });
+
+  describe('transferOwnership', function () {
+    it('transfers ownership', async function () {
+      const { roles, hashRegistry } = await helpers.loadFixture(deploy);
+      await hashRegistry.connect(roles.owner).transferOwnership(roles.randomPerson.address);
+      expect(await hashRegistry.owner()).to.equal(roles.randomPerson.address);
     });
   });
 

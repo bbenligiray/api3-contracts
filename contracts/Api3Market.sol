@@ -72,22 +72,22 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
     function owner()
         public
         view
-        override(IOwnable, HashRegistry)
+        override(HashRegistry, IOwnable)
         returns (address)
     {
         return super.owner();
     }
 
-    // Disabled ownership renouncing and transfers to enable this to be
-    // deployed deterministically
-    function renounceOwnership() public override(IOwnable, HashRegistry) {
-        super.renounceOwnership();
+    /// @notice Overriden to be disabled
+    function renounceOwnership() public pure override(HashRegistry, IOwnable) {
+        revert("Ownership cannot be renounced");
     }
 
+    /// @notice Overriden to be disabled
     function transferOwnership(
-        address newOwner
-    ) public override(IOwnable, HashRegistry) {
-        super.transferOwnership(newOwner);
+        address
+    ) public pure override(HashRegistry, IOwnable) {
+        revert("Ownership cannot be transferred");
     }
 
     function buySubscription(
