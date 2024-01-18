@@ -167,82 +167,114 @@ describe('HashRegistry', function () {
     });
   });
 
+  describe('setHash', function () {
+    context('Sender is the owner', function () {
+      it('sets hash', async function () {
+        const { hashTypeA, roles, hashRegistry } = await helpers.loadFixture(deployAndSetSigners);
+        const hash = ethers.hexlify(ethers.randomBytes(32));
+        const hashBefore = await hashRegistry.hashes(hashTypeA);
+        expect(hashBefore.value).to.equal(ethers.ZeroHash);
+        expect(hashBefore.timestamp).to.equal(0);
+        expect(await hashRegistry.getHashValue(hashTypeA)).to.equal(ethers.ZeroHash);
+        const timestamp = (await helpers.time.latest()) + 1;
+        await helpers.time.setNextBlockTimestamp(timestamp);
+        await expect(hashRegistry.connect(roles.owner).setHash(hashTypeA, hash))
+          .to.emit(hashRegistry, 'SetHash')
+          .withArgs(hashTypeA, hash, timestamp);
+        const hashAfter = await hashRegistry.hashes(hashTypeA);
+        expect(hashAfter.value).to.equal(hash);
+        expect(hashAfter.timestamp).to.equal(timestamp);
+        expect(await hashRegistry.getHashValue(hashTypeA)).to.equal(hash);
+      });
+    });
+    context('Sender is not the owner', function () {
+      it('reverts', async function () {
+        const { hashTypeA, roles, hashRegistry } = await helpers.loadFixture(deployAndSetSigners);
+        const hash = ethers.hexlify(ethers.randomBytes(32));
+        await expect(hashRegistry.connect(roles.randomPerson).setHash(hashTypeA, hash)).to.be.revertedWith(
+          'Ownable: caller is not the owner'
+        );
+      });
+    });
+  });
+
   describe('registerHash', function () {
-    context('Timestamp is not from the future', function () {
-      context('Timestamp is more recent than the previous one', function () {
-        context('Signers are set for the hash type', function () {
-          context('All signatures match', function () {
-            it('registers hash', async function () {
-              const { hashTypeA, roles, sortedHashTypeASigners, hashRegistry } =
-                await helpers.loadFixture(deployAndSetSigners);
+    context('Hash value is not zero', function () {
+      context('Timestamp is not from the future', function () {
+        context('Timestamp is more recent than the previous one', function () {
+          context('Signers are set for the hash type', function () {
+            context('All signatures match', function () {
+              it('registers hash', async function () {
+                const { hashTypeA, roles, sortedHashTypeASigners, hashRegistry } =
+                  await helpers.loadFixture(deployAndSetSigners);
+                const hash = ethers.hexlify(ethers.randomBytes(32));
+                const timestamp = await helpers.time.latest();
+                const signatures = await signHash(sortedHashTypeASigners, hashTypeA, hash, timestamp);
+                const hashBefore = await hashRegistry.hashes(hashTypeA);
+                expect(hashBefore.value).to.equal(ethers.ZeroHash);
+                expect(hashBefore.timestamp).to.equal(0);
+                expect(await hashRegistry.getHashValue(hashTypeA)).to.equal(ethers.ZeroHash);
+                await expect(
+                  hashRegistry.connect(roles.randomPerson).registerHash(hashTypeA, hash, timestamp, signatures)
+                )
+                  .to.emit(hashRegistry, 'RegisteredHash')
+                  .withArgs(hashTypeA, hash, timestamp);
+                const hashAfter = await hashRegistry.hashes(hashTypeA);
+                expect(hashAfter.value).to.equal(hash);
+                expect(hashAfter.timestamp).to.equal(timestamp);
+                expect(await hashRegistry.getHashValue(hashTypeA)).to.equal(hash);
+              });
+            });
+            context('Not all signatures match', function () {
+              it('reverts', async function () {
+                const { hashTypeA, roles, sortedHashTypeBSigners, hashRegistry } =
+                  await helpers.loadFixture(deployAndSetSigners);
+                const hash = ethers.hexlify(ethers.randomBytes(32));
+                const timestamp = await helpers.time.latest();
+                // Sign with the wrong signers
+                const signatures = await signHash(sortedHashTypeBSigners, hashTypeA, hash, timestamp);
+                await expect(
+                  hashRegistry.connect(roles.randomPerson).registerHash(hashTypeA, hash, timestamp, signatures)
+                ).to.be.revertedWith('Signature mismatch');
+              });
+            });
+          });
+          context('Signers are not set for the hash type', function () {
+            it('reverts', async function () {
+              const { hashTypeA, roles, sortedHashTypeASigners, hashRegistry } = await helpers.loadFixture(deploy);
               const hash = ethers.hexlify(ethers.randomBytes(32));
               const timestamp = await helpers.time.latest();
               const signatures = await signHash(sortedHashTypeASigners, hashTypeA, hash, timestamp);
-              const hashBefore = await hashRegistry.hashes(hashTypeA);
-              expect(hashBefore.value).to.equal(ethers.ZeroHash);
-              expect(hashBefore.timestamp).to.equal(0);
-              expect(await hashRegistry.getHashValue(hashTypeA)).to.equal(ethers.ZeroHash);
               await expect(
                 hashRegistry.connect(roles.randomPerson).registerHash(hashTypeA, hash, timestamp, signatures)
-              )
-                .to.emit(hashRegistry, 'RegisteredHash')
-                .withArgs(hashTypeA, hash, timestamp);
-              const hashAfter = await hashRegistry.hashes(hashTypeA);
-              expect(hashAfter.value).to.equal(hash);
-              expect(hashAfter.timestamp).to.equal(timestamp);
-              expect(await hashRegistry.getHashValue(hashTypeA)).to.equal(hash);
-            });
-          });
-          context('Not all signatures match', function () {
-            it('reverts', async function () {
-              const { hashTypeA, roles, sortedHashTypeBSigners, hashRegistry } =
-                await helpers.loadFixture(deployAndSetSigners);
-              const hash = ethers.hexlify(ethers.randomBytes(32));
-              const timestamp = await helpers.time.latest();
-              // Sign with the wrong signers
-              const signatures = await signHash(sortedHashTypeBSigners, hashTypeA, hash, timestamp);
-              await expect(
-                hashRegistry.connect(roles.randomPerson).registerHash(hashTypeA, hash, timestamp, signatures)
-              ).to.be.revertedWith('Signature mismatch');
+              ).to.be.revertedWith('Signers not set');
             });
           });
         });
-        context('Signers are not set for the hash type', function () {
+        context('Timestamp is not more recent than the previous one', function () {
           it('reverts', async function () {
-            const { hashTypeA, roles, sortedHashTypeASigners, hashRegistry } = await helpers.loadFixture(deploy);
+            const { hashTypeA, roles, sortedHashTypeASigners, hashRegistry } =
+              await helpers.loadFixture(deployAndSetSigners);
             const hash = ethers.hexlify(ethers.randomBytes(32));
             const timestamp = await helpers.time.latest();
             const signatures = await signHash(sortedHashTypeASigners, hashTypeA, hash, timestamp);
+            await hashRegistry.connect(roles.randomPerson).registerHash(hashTypeA, hash, timestamp, signatures);
             await expect(
               hashRegistry.connect(roles.randomPerson).registerHash(hashTypeA, hash, timestamp, signatures)
-            ).to.be.revertedWith('Signers not set');
+            ).to.be.revertedWith('Timestamp not more recent');
           });
         });
       });
-      context('Timestamp is not more recent than the previous one', function () {
+      context('Timestamp is from the future', function () {
         it('reverts', async function () {
           const { hashTypeA, roles, sortedHashTypeASigners, hashRegistry } =
             await helpers.loadFixture(deployAndSetSigners);
           const hash = ethers.hexlify(ethers.randomBytes(32));
-          const timestamp = await helpers.time.latest();
+          const timestamp = (await helpers.time.latest()) + 3600;
           const signatures = await signHash(sortedHashTypeASigners, hashTypeA, hash, timestamp);
-          await hashRegistry.connect(roles.randomPerson).registerHash(hashTypeA, hash, timestamp, signatures);
           await expect(
             hashRegistry.connect(roles.randomPerson).registerHash(hashTypeA, hash, timestamp, signatures)
-          ).to.be.revertedWith('Timestamp not more recent');
-        });
-      });
-    });
-    context('Timestamp is from the future', function () {
-      it('reverts', async function () {
-        const { hashTypeA, roles, sortedHashTypeASigners, hashRegistry } =
-          await helpers.loadFixture(deployAndSetSigners);
-        const hash = ethers.hexlify(ethers.randomBytes(32));
-        const timestamp = (await helpers.time.latest()) + 3600;
-        const signatures = await signHash(sortedHashTypeASigners, hashTypeA, hash, timestamp);
-        await expect(
-          hashRegistry.connect(roles.randomPerson).registerHash(hashTypeA, hash, timestamp, signatures)
-        ).to.be.revertedWith('Timestamp from future');
+          ).to.be.revertedWith('Timestamp from future');
         });
       });
     });

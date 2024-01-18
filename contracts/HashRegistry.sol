@@ -83,6 +83,17 @@ contract HashRegistry is Ownable, IHashRegistry {
         emit SetSigners(hashType, signers);
     }
 
+    /// @notice Called by the owner to set a hash
+    /// @param hashType Hash type
+    /// @param value Hash value
+    function setHash(
+        bytes32 hashType,
+        bytes32 value
+    ) external override onlyOwner {
+        hashes[hashType] = Hash({value: value, timestamp: block.timestamp});
+        emit SetHash(hashType, value, block.timestamp);
+    }
+
     /// @notice Registers the hash value and timestamp for the respective type.
     /// The timestamp must be smaller than the block timestamp, and larger than
     /// the timestamp of the previous registration.
