@@ -69,6 +69,15 @@ describe('HashRegistry', function () {
     });
   });
 
+  describe('renounceOwnership', function () {
+    it('reverts', async function () {
+      const { roles, hashRegistry } = await helpers.loadFixture(deploy);
+      await expect(hashRegistry.connect(roles.owner).renounceOwnership()).to.be.revertedWith(
+        'Ownership cannot be renounced'
+      );
+    });
+  });
+
   describe('setSigners', function () {
     context('Sender is the owner', function () {
       context('Hash type is not zero', function () {
