@@ -23,7 +23,7 @@ contract HashRegistry is Ownable, IHashRegistry {
         uint256 timestamp;
     }
 
-    /// @notice Hash type to last registered value and timestamp
+    /// @notice Hash type to the last registered value and timestamp
     mapping(bytes32 => Hash) public override hashes;
 
     /// @notice Hash type to the hash of the array of signer addresses. This
@@ -54,15 +54,15 @@ contract HashRegistry is Ownable, IHashRegistry {
     }
 
     /// @notice Transfers the ownership of the contract
-    /// @param newOwner New owner's address
+    /// @param newOwner New owner address
     function transferOwnership(
         address newOwner
     ) public virtual override(Ownable, IOwnable) {
         super.transferOwnership(newOwner);
     }
 
-    /// @notice Called by the contract owner to set the signers for a hash
-    /// type. The signer addresses must be sorted in ascending order.
+    /// @notice Called by the contract owner to set signers for a hash type.
+    /// The signer addresses must be in ascending order.
     /// @param hashType Hash type
     /// @param signers Signer addresses
     function setSigners(
@@ -84,11 +84,11 @@ contract HashRegistry is Ownable, IHashRegistry {
     }
 
     /// @notice Registers the hash value and timestamp for the respective type.
-    /// The timestamp must be smaller than the timestamp of the block, and
-    /// larger than the timestamp of the previous registration.
+    /// The timestamp must be smaller than the block timestamp, and larger than
+    /// the timestamp of the previous registration.
     /// The signers must have been set for the hash type, and the signatures
-    /// must be sorted for the addresses of their corresponding signers to be
-    /// in ascending order.
+    /// must be sorted for the respective signer addresses to be in ascending
+    /// order.
     /// @param hashType Hash type
     /// @param value Hash value
     /// @param timestamp Hash timestamp
@@ -124,8 +124,7 @@ contract HashRegistry is Ownable, IHashRegistry {
         emit RegisteredHash(hashType, value, timestamp);
     }
 
-    /// @notice Called to get the hash value for the type. This returning
-    /// `bytes32(0)` means that no hashes has been registered for the type.
+    /// @notice Called to get the hash value for the type
     /// @param hashType Hash type
     /// @return value Hash value
     function getHashValue(
