@@ -42,7 +42,10 @@ contract AirseekerRegistry is
     uint256 public constant override MAXIMUM_BEACON_COUNT_IN_SET = 21;
 
     /// @notice Maximum length of the encoded update parameters
-    uint256 public constant MAXIMUM_UPDATE_PARAMETERS_LENGTH = 1024;
+    uint256 public constant override MAXIMUM_UPDATE_PARAMETERS_LENGTH = 1024;
+
+    /// @notice Maximum signed API URL length
+    uint256 public constant override MAXIMUM_SIGNED_API_URL_LENGTH = 256;
 
     /// @notice Api3ServerV1 contract address
     address public immutable override api3ServerV1;
@@ -265,7 +268,8 @@ contract AirseekerRegistry is
     ) external override onlyOwner {
         require(airnode != address(0), "Airnode address zero");
         require(
-            abi.encodePacked(signedApiUrl).length <= 256,
+            abi.encodePacked(signedApiUrl).length <=
+                MAXIMUM_SIGNED_API_URL_LENGTH,
             "Signed API URL too long"
         );
         if (

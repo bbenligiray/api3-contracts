@@ -91,6 +91,10 @@ interface IAirseekerRegistry is IOwnable, IExtendedSelfMulticall {
 
     function MAXIMUM_BEACON_COUNT_IN_SET() external view returns (uint256);
 
+    function MAXIMUM_UPDATE_PARAMETERS_LENGTH() external view returns (uint256);
+
+    function MAXIMUM_SIGNED_API_URL_LENGTH() external view returns (uint256);
+
     function api3ServerV1() external view returns (address);
 
     function airnodeToSignedApiUrl(

@@ -98,6 +98,7 @@ async function registerBeaconSet(airseekerRegistry, feedName, airnodes) {
 describe('AirseekerRegistry', function () {
   const MAXIMUM_BEACON_COUNT_IN_SET = 21;
   const MAXIMUM_UPDATE_PARAMETERS_LENGTH = 1024;
+  const MAXIMUM_SIGNED_API_URL_LENGTH = 256;
 
   async function deploy() {
     const roleNames = ['deployer', 'api3ServerV1Manager', 'owner', 'randomPerson'];
@@ -153,6 +154,7 @@ describe('AirseekerRegistry', function () {
           const { roles, api3ServerV1, airseekerRegistry } = await helpers.loadFixture(deploy);
           expect(await airseekerRegistry.MAXIMUM_BEACON_COUNT_IN_SET()).to.equal(MAXIMUM_BEACON_COUNT_IN_SET);
           expect(await airseekerRegistry.MAXIMUM_UPDATE_PARAMETERS_LENGTH()).to.equal(MAXIMUM_UPDATE_PARAMETERS_LENGTH);
+          expect(await airseekerRegistry.MAXIMUM_SIGNED_API_URL_LENGTH()).to.equal(MAXIMUM_SIGNED_API_URL_LENGTH);
           expect(await airseekerRegistry.owner()).to.equal(roles.owner.address);
           expect(await airseekerRegistry.api3ServerV1()).to.equal(await api3ServerV1.getAddress());
         });
@@ -575,7 +577,7 @@ describe('AirseekerRegistry', function () {
           it('reverts', async function () {
             const { roles, airseekerRegistry } = await helpers.loadFixture(deploy);
             const airnodeAddress = ethers.getAddress(ethers.hexlify(ethers.randomBytes(20)));
-            const signedApiUrl = 'X'.repeat(256 + 1);
+            const signedApiUrl = 'X'.repeat(MAXIMUM_SIGNED_API_URL_LENGTH + 1);
             await expect(
               airseekerRegistry.connect(roles.owner).setSignedApiUrl(airnodeAddress, signedApiUrl)
             ).to.be.revertedWith('Signed API URL too long');
