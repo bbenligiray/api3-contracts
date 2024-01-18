@@ -41,6 +41,9 @@ contract AirseekerRegistry is
     /// than `MAXIMUM_BEACON_COUNT_IN_SET` Beacons.
     uint256 public constant override MAXIMUM_BEACON_COUNT_IN_SET = 21;
 
+    /// @notice Maximum length of the encoded update parameters
+    uint256 public constant MAXIMUM_UPDATE_PARAMETERS_LENGTH = 1024;
+
     /// @notice Api3ServerV1 contract address
     address public immutable override api3ServerV1;
 
@@ -106,6 +109,16 @@ contract AirseekerRegistry is
     /// @param dapiName dAPI name
     modifier onlyNonZeroDapiName(bytes32 dapiName) {
         require(dapiName != bytes32(0), "dAPI name zero");
+        _;
+    }
+
+    /// @dev Reverts if the update parameters are too long
+    /// @param updateParameters Update parameters
+    modifier onlyValidUpdateParameters(bytes calldata updateParameters) {
+        require(
+            updateParameters.length <= MAXIMUM_UPDATE_PARAMETERS_LENGTH,
+            "Update parameters too long"
+        );
         _;
     }
 
@@ -184,8 +197,13 @@ contract AirseekerRegistry is
     function setDataFeedIdUpdateParameters(
         bytes32 dataFeedId,
         bytes calldata updateParameters
-    ) external override onlyOwner onlyNonZeroDataFeedId(dataFeedId) {
-        // TODO: Set update parameters maximum length
+    )
+        external
+        override
+        onlyOwner
+        onlyNonZeroDataFeedId(dataFeedId)
+        onlyValidUpdateParameters(updateParameters)
+    {
         bytes32 updateParametersHash = keccak256(updateParameters);
         if (
             dataFeedIdToUpdateParametersHash[dataFeedId] != updateParametersHash
@@ -214,8 +232,13 @@ contract AirseekerRegistry is
     function setDapiNameUpdateParameters(
         bytes32 dapiName,
         bytes calldata updateParameters
-    ) external override onlyOwner onlyNonZeroDapiName(dapiName) {
-        // TODO: Set update parameters maximum length
+    )
+        external
+        override
+        onlyOwner
+        onlyNonZeroDapiName(dapiName)
+        onlyValidUpdateParameters(updateParameters)
+    {
         bytes32 updateParametersHash = keccak256(updateParameters);
         if (dapiNameToUpdateParametersHash[dapiName] != updateParametersHash) {
             dapiNameToUpdateParametersHash[dapiName] = updateParametersHash;

@@ -97,6 +97,7 @@ async function registerBeaconSet(airseekerRegistry, feedName, airnodes) {
 
 describe('AirseekerRegistry', function () {
   const MAXIMUM_BEACON_COUNT_IN_SET = 21;
+  const MAXIMUM_UPDATE_PARAMETERS_LENGTH = 1024;
 
   async function deploy() {
     const roleNames = ['deployer', 'api3ServerV1Manager', 'owner', 'randomPerson'];
@@ -151,6 +152,7 @@ describe('AirseekerRegistry', function () {
         it('constructs', async function () {
           const { roles, api3ServerV1, airseekerRegistry } = await helpers.loadFixture(deploy);
           expect(await airseekerRegistry.MAXIMUM_BEACON_COUNT_IN_SET()).to.equal(MAXIMUM_BEACON_COUNT_IN_SET);
+          expect(await airseekerRegistry.MAXIMUM_UPDATE_PARAMETERS_LENGTH()).to.equal(MAXIMUM_UPDATE_PARAMETERS_LENGTH);
           expect(await airseekerRegistry.owner()).to.equal(roles.owner.address);
           expect(await airseekerRegistry.api3ServerV1()).to.equal(await api3ServerV1.getAddress());
         });
@@ -389,44 +391,55 @@ describe('AirseekerRegistry', function () {
   describe('setDataFeedIdUpdateParameters', function () {
     context('Sender is the owner', function () {
       context('Data feed ID is not zero', function () {
-        context('Values update update parameters', function () {
-          context('Values have not been used before', function () {
-            it('updates update parameters', async function () {
-              const { roles, dataFeedId, airseekerRegistry } = await helpers.loadFixture(deploy);
-              const updateParameters = encodeUpdateParameters(1_000_000, 0, 24 * 60 * 60);
-              expect(await airseekerRegistry.dataFeedIdToUpdateParameters(dataFeedId)).to.equal('0x');
-              await expect(
-                airseekerRegistry.connect(roles.owner).setDataFeedIdUpdateParameters(dataFeedId, updateParameters)
-              )
-                .to.emit(airseekerRegistry, 'UpdatedDataFeedIdUpdateParameters')
-                .withArgs(dataFeedId, updateParameters);
-              expect(await airseekerRegistry.dataFeedIdToUpdateParameters(dataFeedId)).to.equal(updateParameters);
+        context('Update parameters length does not exceed the maximum', function () {
+          context('Values update update parameters', function () {
+            context('Values have not been used before', function () {
+              it('updates update parameters', async function () {
+                const { roles, dataFeedId, airseekerRegistry } = await helpers.loadFixture(deploy);
+                const updateParameters = encodeUpdateParameters(1_000_000, 0, 24 * 60 * 60);
+                expect(await airseekerRegistry.dataFeedIdToUpdateParameters(dataFeedId)).to.equal('0x');
+                await expect(
+                  airseekerRegistry.connect(roles.owner).setDataFeedIdUpdateParameters(dataFeedId, updateParameters)
+                )
+                  .to.emit(airseekerRegistry, 'UpdatedDataFeedIdUpdateParameters')
+                  .withArgs(dataFeedId, updateParameters);
+                expect(await airseekerRegistry.dataFeedIdToUpdateParameters(dataFeedId)).to.equal(updateParameters);
+              });
+            });
+            context('Values have been used before', function () {
+              it('updates update parameters', async function () {
+                const { roles, dataFeedId, dapiName, airseekerRegistry } = await helpers.loadFixture(deploy);
+                const updateParameters = encodeUpdateParameters(1_000_000, 0, 24 * 60 * 60);
+                await airseekerRegistry.connect(roles.owner).setDapiNameUpdateParameters(dapiName, updateParameters);
+                expect(await airseekerRegistry.dataFeedIdToUpdateParameters(dataFeedId)).to.equal('0x');
+                await expect(
+                  airseekerRegistry.connect(roles.owner).setDataFeedIdUpdateParameters(dataFeedId, updateParameters)
+                )
+                  .to.emit(airseekerRegistry, 'UpdatedDataFeedIdUpdateParameters')
+                  .withArgs(dataFeedId, updateParameters);
+                expect(await airseekerRegistry.dataFeedIdToUpdateParameters(dataFeedId)).to.equal(updateParameters);
+              });
             });
           });
-          context('Values have been used before', function () {
-            it('updates update parameters', async function () {
-              const { roles, dataFeedId, dapiName, airseekerRegistry } = await helpers.loadFixture(deploy);
+          context('Values do not update update parameters', function () {
+            it('does nothing', async function () {
+              const { roles, dataFeedId, airseekerRegistry } = await helpers.loadFixture(deploy);
               const updateParameters = encodeUpdateParameters(1_000_000, 0, 24 * 60 * 60);
-              await airseekerRegistry.connect(roles.owner).setDapiNameUpdateParameters(dapiName, updateParameters);
-              expect(await airseekerRegistry.dataFeedIdToUpdateParameters(dataFeedId)).to.equal('0x');
+              await airseekerRegistry.connect(roles.owner).setDataFeedIdUpdateParameters(dataFeedId, updateParameters);
               await expect(
                 airseekerRegistry.connect(roles.owner).setDataFeedIdUpdateParameters(dataFeedId, updateParameters)
-              )
-                .to.emit(airseekerRegistry, 'UpdatedDataFeedIdUpdateParameters')
-                .withArgs(dataFeedId, updateParameters);
+              ).to.not.emit(airseekerRegistry, 'UpdatedDataFeedIdUpdateParameters');
               expect(await airseekerRegistry.dataFeedIdToUpdateParameters(dataFeedId)).to.equal(updateParameters);
             });
           });
         });
-        context('Values do not update update parameters', function () {
-          it('does nothing', async function () {
+        context('Update parameters length exceeds the maximum', function () {
+          it('reverts', async function () {
             const { roles, dataFeedId, airseekerRegistry } = await helpers.loadFixture(deploy);
-            const updateParameters = encodeUpdateParameters(1_000_000, 0, 24 * 60 * 60);
-            await airseekerRegistry.connect(roles.owner).setDataFeedIdUpdateParameters(dataFeedId, updateParameters);
+            const updateParameters = `0x${'0'.repeat((MAXIMUM_UPDATE_PARAMETERS_LENGTH + 1) * 2)}`;
             await expect(
               airseekerRegistry.connect(roles.owner).setDataFeedIdUpdateParameters(dataFeedId, updateParameters)
-            ).to.not.emit(airseekerRegistry, 'UpdatedDataFeedIdUpdateParameters');
-            expect(await airseekerRegistry.dataFeedIdToUpdateParameters(dataFeedId)).to.equal(updateParameters);
+            ).to.be.revertedWith('Update parameters too long');
           });
         });
       });
@@ -454,44 +467,57 @@ describe('AirseekerRegistry', function () {
   describe('setDapiNameUpdateParameters', function () {
     context('Sender is the owner', function () {
       context('dAPI name is not zero', function () {
-        context('Values update update parameters', function () {
-          context('Values have not been used before', function () {
-            it('updates update parameters', async function () {
-              const { roles, dapiName, airseekerRegistry } = await helpers.loadFixture(deploy);
-              const updateParameters = encodeUpdateParameters(1_000_000, 0, 24 * 60 * 60);
-              expect(await airseekerRegistry.dapiNameToUpdateParameters(dapiName)).to.equal('0x');
-              await expect(
-                airseekerRegistry.connect(roles.owner).setDapiNameUpdateParameters(dapiName, updateParameters)
-              )
-                .to.emit(airseekerRegistry, 'UpdatedDapiNameUpdateParameters')
-                .withArgs(dapiName, updateParameters);
-              expect(await airseekerRegistry.dapiNameToUpdateParameters(dapiName)).to.equal(updateParameters);
+        context('Update parameters length does not exceed the maximum', function () {
+          context('Values update update parameters', function () {
+            context('Values have not been used before', function () {
+              it('updates update parameters', async function () {
+                const { roles, dapiName, airseekerRegistry } = await helpers.loadFixture(deploy);
+                const updateParameters = encodeUpdateParameters(1_000_000, 0, 24 * 60 * 60);
+                expect(await airseekerRegistry.dapiNameToUpdateParameters(dapiName)).to.equal('0x');
+                await expect(
+                  airseekerRegistry.connect(roles.owner).setDapiNameUpdateParameters(dapiName, updateParameters)
+                )
+                  .to.emit(airseekerRegistry, 'UpdatedDapiNameUpdateParameters')
+                  .withArgs(dapiName, updateParameters);
+                expect(await airseekerRegistry.dapiNameToUpdateParameters(dapiName)).to.equal(updateParameters);
+              });
+            });
+            context('Values have been used before', function () {
+              it('updates update parameters', async function () {
+                const { roles, dataFeedId, dapiName, airseekerRegistry } = await helpers.loadFixture(deploy);
+                const updateParameters = encodeUpdateParameters(1_000_000, 0, 24 * 60 * 60);
+                await airseekerRegistry
+                  .connect(roles.owner)
+                  .setDataFeedIdUpdateParameters(dataFeedId, updateParameters);
+                expect(await airseekerRegistry.dapiNameToUpdateParameters(dapiName)).to.equal('0x');
+                await expect(
+                  airseekerRegistry.connect(roles.owner).setDapiNameUpdateParameters(dapiName, updateParameters)
+                )
+                  .to.emit(airseekerRegistry, 'UpdatedDapiNameUpdateParameters')
+                  .withArgs(dapiName, updateParameters);
+                expect(await airseekerRegistry.dapiNameToUpdateParameters(dapiName)).to.equal(updateParameters);
+              });
             });
           });
-          context('Values have been used before', function () {
-            it('updates update parameters', async function () {
-              const { roles, dataFeedId, dapiName, airseekerRegistry } = await helpers.loadFixture(deploy);
+          context('Values do not update update parameters', function () {
+            it('does nothing', async function () {
+              const { roles, dapiName, airseekerRegistry } = await helpers.loadFixture(deploy);
               const updateParameters = encodeUpdateParameters(1_000_000, 0, 24 * 60 * 60);
-              await airseekerRegistry.connect(roles.owner).setDataFeedIdUpdateParameters(dataFeedId, updateParameters);
-              expect(await airseekerRegistry.dapiNameToUpdateParameters(dapiName)).to.equal('0x');
+              await airseekerRegistry.connect(roles.owner).setDapiNameUpdateParameters(dapiName, updateParameters);
               await expect(
                 airseekerRegistry.connect(roles.owner).setDapiNameUpdateParameters(dapiName, updateParameters)
-              )
-                .to.emit(airseekerRegistry, 'UpdatedDapiNameUpdateParameters')
-                .withArgs(dapiName, updateParameters);
+              ).to.not.emit(airseekerRegistry, 'UpdatedDapiNameUpdateParameters');
               expect(await airseekerRegistry.dapiNameToUpdateParameters(dapiName)).to.equal(updateParameters);
             });
           });
         });
-        context('Values do not update update parameters', function () {
-          it('does nothing', async function () {
+        context('Update parameters length exceeds the maximum', function () {
+          it('reverts', async function () {
             const { roles, dapiName, airseekerRegistry } = await helpers.loadFixture(deploy);
-            const updateParameters = encodeUpdateParameters(1_000_000, 0, 24 * 60 * 60);
-            await airseekerRegistry.connect(roles.owner).setDapiNameUpdateParameters(dapiName, updateParameters);
+            const updateParameters = `0x${'0'.repeat((MAXIMUM_UPDATE_PARAMETERS_LENGTH + 1) * 2)}`;
             await expect(
               airseekerRegistry.connect(roles.owner).setDapiNameUpdateParameters(dapiName, updateParameters)
-            ).to.not.emit(airseekerRegistry, 'UpdatedDapiNameUpdateParameters');
-            expect(await airseekerRegistry.dapiNameToUpdateParameters(dapiName)).to.equal(updateParameters);
+            ).to.be.revertedWith('Update parameters too long');
           });
         });
       });
