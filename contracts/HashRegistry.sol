@@ -13,7 +13,8 @@ import "./vendor/@openzeppelin/contracts@4.9.5/utils/cryptography/ECDSA.sol";
 /// registered, its signers must be set by the contract owner, and valid
 /// signatures by each signer must be provided. The hash values are bundled
 /// with timestamps that act as nonces, meaning that each registration must
-/// be with a larger timestamp than the previous.
+/// be with a larger timestamp than the previous. The contract owner can
+/// override previously registered hashes.
 /// @dev This contract can be used in standalone form to be referred to through
 /// external calls, or inherited by the contract that will access the
 /// registered hashes internally
@@ -26,9 +27,7 @@ contract HashRegistry is Ownable, IHashRegistry {
     /// @notice Hash type to the last registered value and timestamp
     mapping(bytes32 => Hash) public override hashes;
 
-    /// @notice Hash type to the hash of the array of signer addresses. This
-    /// returning `bytes32(0)` means that the signers have not been set for the
-    /// hash type.
+    /// @notice Hash type to the hash of the array of signer addresses
     mapping(bytes32 => bytes32) public override hashTypeToSignersHash;
 
     /// @param owner_ Owner address
@@ -83,7 +82,8 @@ contract HashRegistry is Ownable, IHashRegistry {
         emit SetSigners(hashType, signers);
     }
 
-    /// @notice Called by the owner to set a hash
+    /// @notice Called by the owner to set a hash. Overrides previous
+    /// registrations and is allowed to set the value to `bytes32(0)`.
     /// @param hashType Hash type
     /// @param hashValue Hash value
     function setHash(
@@ -95,6 +95,7 @@ contract HashRegistry is Ownable, IHashRegistry {
     }
 
     /// @notice Registers the hash value and timestamp for the respective type.
+    /// The hash value cannot be zero.
     /// The timestamp must not exceed the block timestamp, yet be larger than
     /// the timestamp of the previous registration.
     /// The signers must have been set for the hash type, and the signatures
