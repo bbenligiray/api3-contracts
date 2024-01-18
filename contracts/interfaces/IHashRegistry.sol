@@ -6,32 +6,36 @@ import "./IOwnable.sol";
 interface IHashRegistry is IOwnable {
     event SetSigners(bytes32 indexed hashType, address[] signers);
 
-    event SetHash(bytes32 indexed hashType, bytes32 value, uint256 timestamp);
+    event SetHash(
+        bytes32 indexed hashType,
+        bytes32 hashValue,
+        uint256 hashTimestamp
+    );
 
     event RegisteredHash(
         bytes32 indexed hashType,
-        bytes32 value,
-        uint256 timestamp
+        bytes32 hashValue,
+        uint256 hashTimestamp
     );
 
     function setSigners(bytes32 hashType, address[] calldata signers) external;
 
-    function setHash(bytes32 hashType, bytes32 value) external;
+    function setHash(bytes32 hashType, bytes32 hashValue) external;
 
     function registerHash(
         bytes32 hashType,
-        bytes32 value,
-        uint256 timestamp,
+        bytes32 hashValue,
+        uint256 hashTimestamp,
         bytes[] calldata signatures
     ) external;
 
     function getHashValue(
         bytes32 hashType
-    ) external view returns (bytes32 value);
+    ) external view returns (bytes32 hashValue);
 
     function hashes(
         bytes32 hashType
-    ) external view returns (bytes32 value, uint256 timestamp);
+    ) external view returns (bytes32 hashValue, uint256 hashTimestamp);
 
     function hashTypeToSignersHash(
         bytes32 hashType

@@ -270,7 +270,7 @@ describe('HashRegistry', function () {
             await hashRegistry.connect(roles.randomPerson).registerHash(hashTypeA, hash, timestamp, signatures);
             await expect(
               hashRegistry.connect(roles.randomPerson).registerHash(hashTypeA, hash, timestamp, signatures)
-            ).to.be.revertedWith('Timestamp not more recent');
+            ).to.be.revertedWith('Hash timestamp not more recent');
           });
         });
       });
@@ -283,7 +283,7 @@ describe('HashRegistry', function () {
           const signatures = await signHash(sortedHashTypeASigners, hashTypeA, hash, timestamp);
           await expect(
             hashRegistry.connect(roles.randomPerson).registerHash(hashTypeA, hash, timestamp, signatures)
-          ).to.be.revertedWith('Timestamp from future');
+          ).to.be.revertedWith('Hash timestamp from future');
         });
       });
     });

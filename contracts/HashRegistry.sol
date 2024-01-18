@@ -85,36 +85,36 @@ contract HashRegistry is Ownable, IHashRegistry {
 
     /// @notice Called by the owner to set a hash
     /// @param hashType Hash type
-    /// @param value Hash value
+    /// @param hashValue Hash value
     function setHash(
         bytes32 hashType,
-        bytes32 value
+        bytes32 hashValue
     ) external override onlyOwner {
-        hashes[hashType] = Hash({value: value, timestamp: block.timestamp});
-        emit SetHash(hashType, value, block.timestamp);
+        hashes[hashType] = Hash({value: hashValue, timestamp: block.timestamp});
+        emit SetHash(hashType, hashValue, block.timestamp);
     }
 
     /// @notice Registers the hash value and timestamp for the respective type.
-    /// The timestamp must be smaller than the block timestamp, and larger than
+    /// The timestamp must not exceed the block timestamp, yet be larger than
     /// the timestamp of the previous registration.
     /// The signers must have been set for the hash type, and the signatures
     /// must be sorted for the respective signer addresses to be in ascending
     /// order.
     /// @param hashType Hash type
-    /// @param value Hash value
-    /// @param timestamp Hash timestamp
+    /// @param hashValue Hash value
+    /// @param hashTimestamp Hash timestamp
     /// @param signatures Signatures
     function registerHash(
         bytes32 hashType,
-        bytes32 value,
-        uint256 timestamp,
+        bytes32 hashValue,
+        uint256 hashTimestamp,
         bytes[] calldata signatures
     ) external override {
-        require(value != bytes32(0), "Hash value zero");
-        require(timestamp <= block.timestamp, "Timestamp from future");
+        require(hashValue != bytes32(0), "Hash value zero");
+        require(hashTimestamp <= block.timestamp, "Hash timestamp from future");
         require(
-            timestamp > hashes[hashType].timestamp,
-            "Timestamp not more recent"
+            hashTimestamp > hashes[hashType].timestamp,
+            "Hash timestamp not more recent"
         );
         bytes32 signersHash = hashTypeToSignersHash[hashType];
         require(signersHash != bytes32(0), "Signers not set");
@@ -123,7 +123,9 @@ contract HashRegistry is Ownable, IHashRegistry {
         for (uint256 ind = 0; ind < signaturesCount; ind++) {
             signers[ind] = ECDSA.recover(
                 ECDSA.toEthSignedMessageHash(
-                    keccak256(abi.encodePacked(hashType, value, timestamp))
+                    keccak256(
+                        abi.encodePacked(hashType, hashValue, hashTimestamp)
+                    )
                 ),
                 signatures[ind]
             );
@@ -132,16 +134,16 @@ contract HashRegistry is Ownable, IHashRegistry {
             signersHash == keccak256(abi.encodePacked(signers)),
             "Signature mismatch"
         );
-        hashes[hashType] = Hash({value: value, timestamp: timestamp});
-        emit RegisteredHash(hashType, value, timestamp);
+        hashes[hashType] = Hash({value: hashValue, timestamp: hashTimestamp});
+        emit RegisteredHash(hashType, hashValue, hashTimestamp);
     }
 
     /// @notice Called to get the hash value for the type
     /// @param hashType Hash type
-    /// @return value Hash value
+    /// @return hashValue Hash value
     function getHashValue(
         bytes32 hashType
-    ) external view override returns (bytes32 value) {
-        value = hashes[hashType].value;
+    ) external view override returns (bytes32 hashValue) {
+        hashValue = hashes[hashType].value;
     }
 }
