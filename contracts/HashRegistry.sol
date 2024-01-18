@@ -99,6 +99,7 @@ contract HashRegistry is Ownable, IHashRegistry {
         uint256 timestamp,
         bytes[] calldata signatures
     ) external override {
+        require(value != bytes32(0), "Hash value zero");
         require(timestamp <= block.timestamp, "Timestamp from future");
         require(
             timestamp > hashes[hashType].timestamp,

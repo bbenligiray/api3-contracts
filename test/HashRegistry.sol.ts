@@ -243,6 +243,19 @@ describe('HashRegistry', function () {
         await expect(
           hashRegistry.connect(roles.randomPerson).registerHash(hashTypeA, hash, timestamp, signatures)
         ).to.be.revertedWith('Timestamp from future');
+        });
+      });
+    });
+    context('Hash value is not zero', function () {
+      it('reverts', async function () {
+        const { hashTypeA, roles, sortedHashTypeASigners, hashRegistry } =
+          await helpers.loadFixture(deployAndSetSigners);
+        const hash = ethers.hexlify(ethers.randomBytes(32));
+        const timestamp = await helpers.time.latest();
+        const signatures = await signHash(sortedHashTypeASigners, hashTypeA, hash, timestamp);
+        await expect(
+          hashRegistry.connect(roles.randomPerson).registerHash(hashTypeA, ethers.ZeroHash, timestamp, signatures)
+        ).to.be.revertedWith('Hash value zero');
       });
     });
   });
