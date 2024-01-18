@@ -13,13 +13,17 @@ import "@api3/airnode-protocol-v1/contracts/api3-server-v1/interfaces/IApi3Serve
 /// chain when certain conditions are met so that the data feeds served on the
 /// Api3ServerV1 contract are updated according to the respective specs. In
 /// other words, this contract can be thought of as an on-chain configuration
-/// file for an Airseeker (or multiple Airseekers with redundancy).
+/// file for an Airseeker (or multiple Airseekers in a setup with redundancy).
 /// The Airseeker must know which data feeds are active (and thus need to be
 /// updated), the constituting Airnode (the oracle node that API providers
 /// operate to sign data) addresses and request template IDs, what the
 /// respective on-chain data feed values are, what the update parameters are,
 /// and the URL of the signed APIs (from which Airseeker can fetch signed data)
 /// that are hosted by the respective API providers.
+/// The contract owner is responsible with leaving the state of this contract
+/// in a way that Airseeker expects. For example, if a dAPI name is activated
+/// without registering the respective data feed, the Airseeker will not have
+/// the data it needs to execute updates.
 contract AirseekerRegistry is
     Ownable,
     ExtendedSelfMulticall,
@@ -29,37 +33,35 @@ contract AirseekerRegistry is
 
     /// @notice Maximum number of Beacons that a Beacon set whose details are
     /// being registered can consist of
-    /// @dev A Beacon is identified by an Airnode address and a request
-    /// template ID, which means it is a single-source data feed. Multiple
-    /// Beacons can be aggregated on-chain to create a multiple-source data
-    /// feed, which is called a Beacon set. This conract does not support
-    /// Beacon sets that consist of more than `MAXIMUM_BEACON_COUNT_IN_SET`
-    /// Beacons. In the context of a first-party oracle solution, this is the
-    /// maximum number of API providers.
+    /// @dev Api3ServerV1 introduces the concept of a Beacon, which is a
+    /// single-source data feed. Api3ServerV1 allows Beacons to be read
+    /// individually, or arbitrary combinations of them to be aggregated
+    /// on-chain to form multiple-source data feeds, which are called Beacon
+    /// sets. This contract does not support Beacon sets that consist of more
+    /// than `MAXIMUM_BEACON_COUNT_IN_SET` Beacons.
     uint256 public constant override MAXIMUM_BEACON_COUNT_IN_SET = 21;
 
     /// @notice Api3ServerV1 contract address
     address public immutable override api3ServerV1;
 
     /// @notice Airnode address to signed API URL
-    /// @dev The signed APIs must implement the specific interface that
-    /// Airseeker expects. Refer to https://github.com/api3dao/signed-api for
-    /// an example implementation.
-    /// The signed APIs must be hosted by the operator of the respective
-    /// Airnode (i.e., the API provider) for a trust-minimized architecture.
+    /// @dev An Airseeker can be configured to refer to additional signed APIs
+    /// than the ones whose URLs are stored in this contract for redundancy
     mapping(address => string) public override airnodeToSignedApiUrl;
 
     /// @notice Data feed ID to encoded details
-    /// @dev See the `registerDataFeed()` implementation for details
+    /// @dev See the `registerDataFeed()` implementation for the encoding
+    /// scheme
     mapping(bytes32 => bytes) public override dataFeedIdToDetails;
 
     // Api3ServerV1 uses Beacon IDs (see the `deriveBeaconId()` implementation)
     // and Beacon set IDs (see the `deriveBeaconSetId()` implementation) to
     // address data feeds. We use data feed ID as a general term to refer to a
-    // Beacon or Beacon set ID.
-    // A data feed ID is immutable. Api3ServerV1 allows a dAPI name to be
-    // pointed to a data feed ID to implement a mutable data feed addressing
-    // scheme.
+    // Beacon ID/Beacon set ID.
+    // A data feed ID is immutable (i.e., it always points to the same Beacon
+    // or Beacon set). Api3ServerV1 allows a dAPI name to be pointed to a data
+    // feed ID by privileged accounts to implement a mutable data feed
+    // addressing scheme.
     // If the data feed ID or dAPI name should be used to read a data feed
     // depends on the use case. To support both schemes, AirseekerRegistry
     // allows data feeds specs to be defined with either the data feed ID or
@@ -68,8 +70,9 @@ contract AirseekerRegistry is
 
     EnumerableSet.Bytes32Set private activeDapiNames;
 
-    // Considering that the update parameters are typically reused, a hash map
-    // is used to avoid storing the same update parameters redundantly
+    // Considering that the update parameters are typically reused between data
+    // feeds, a hash map is used to avoid storing the same update parameters
+    // redundantly
     mapping(bytes32 => bytes32) private dataFeedIdToUpdateParametersHash;
 
     mapping(bytes32 => bytes32) private dapiNameToUpdateParametersHash;
@@ -133,6 +136,8 @@ contract AirseekerRegistry is
         revert("Ownership cannot be transferred");
     }
 
+    /// @notice Called by the owner to set the data feed ID to be activated
+    /// @param dataFeedId Data feed ID
     function setDataFeedIdToBeActivated(
         bytes32 dataFeedId
     ) external override onlyOwner onlyNonZeroDataFeedId(dataFeedId) {
@@ -141,6 +146,8 @@ contract AirseekerRegistry is
         }
     }
 
+    /// @notice Called by the owner to set the dAPI name to be activated
+    /// @param dapiName dAPI name
     function setDapiNameToBeActivated(
         bytes32 dapiName
     ) external override onlyOwner onlyNonZeroDapiName(dapiName) {
@@ -149,6 +156,8 @@ contract AirseekerRegistry is
         }
     }
 
+    /// @notice Called by the owner to set the data feed ID to be deactivated
+    /// @param dataFeedId Data feed ID
     function setDataFeedIdToBeDeactivated(
         bytes32 dataFeedId
     ) external override onlyOwner onlyNonZeroDataFeedId(dataFeedId) {
@@ -157,6 +166,8 @@ contract AirseekerRegistry is
         }
     }
 
+    /// @notice Called by the owner to set the dAPI name to be deactivated
+    /// @param dapiName dAPI name
     function setDapiNameToBeDeactivated(
         bytes32 dapiName
     ) external override onlyOwner onlyNonZeroDapiName(dapiName) {
@@ -165,11 +176,16 @@ contract AirseekerRegistry is
         }
     }
 
+    /// @notice Called by the owner to set the data feed ID update parameters.
+    /// The update parameters must be encoded in a format that Airseeker
+    /// expects.
+    /// @param dataFeedId Data feed ID
+    /// @param updateParameters Update parameters
     function setDataFeedIdUpdateParameters(
         bytes32 dataFeedId,
         bytes calldata updateParameters
     ) external override onlyOwner onlyNonZeroDataFeedId(dataFeedId) {
-        // Set update parameters maximum length
+        // TODO: Set update parameters maximum length
         bytes32 updateParametersHash = keccak256(updateParameters);
         if (
             dataFeedIdToUpdateParametersHash[dataFeedId] != updateParametersHash
@@ -190,10 +206,16 @@ contract AirseekerRegistry is
         }
     }
 
+    /// @notice Called by the owner to set the dAPI name update parameters.
+    /// The update parameters must be encoded in a format that Airseeker
+    /// expects.
+    /// @param dapiName dAPI name
+    /// @param updateParameters Update parameters
     function setDapiNameUpdateParameters(
         bytes32 dapiName,
         bytes calldata updateParameters
     ) external override onlyOwner onlyNonZeroDapiName(dapiName) {
+        // TODO: Set update parameters maximum length
         bytes32 updateParametersHash = keccak256(updateParameters);
         if (dapiNameToUpdateParametersHash[dapiName] != updateParametersHash) {
             dapiNameToUpdateParametersHash[dapiName] = updateParametersHash;
@@ -209,6 +231,11 @@ contract AirseekerRegistry is
         }
     }
 
+    /// @notice Called by the owner to set the signed API URL for the Airnode.
+    /// The signed API must implement the specific interface that Airseeker
+    /// expects.
+    /// @param airnode Airnode address
+    /// @param signedApiUrl Signed API URL
     function setSignedApiUrl(
         address airnode,
         string calldata signedApiUrl
@@ -227,6 +254,13 @@ contract AirseekerRegistry is
         }
     }
 
+    /// @notice Registers the data feed. In the case that the data feed is a
+    /// Beacon, the details should be the ABI-encoded Airnode address and
+    /// template ID. In the case that the data feed is a Beacon set, the
+    /// details should be the ABI-encoded Airnode addresses array and template
+    /// IDs array.
+    /// @param dataFeedDetails Data feed details
+    /// @return dataFeedId Data feed ID
     function registerDataFeed(
         bytes calldata dataFeedDetails
     ) external override returns (bytes32 dataFeedId) {
@@ -283,17 +317,24 @@ contract AirseekerRegistry is
         }
     }
 
-    // The owner of this contract is responsible with registering
-    // `dataFeedDetails` and setting `updateParameters` for data feeds that it
-    // will activate. In the case that an Airseeker fetches an active data feed
-    // with empty `dataFeedDetails` and/or `updateParameters` that cannot be
-    // parsed, it should skip it.
-    // `dapiName` will only be `bytes32(0)` when the active data feed is
-    // identified by a data feed ID and not a dAPI name.
-    // In general, this function makes a best effort attempt at retrieving all
-    // data related to an active data feed, even if the returned data may not
-    // be enough for the intended use-case of being a source of reference for
-    // Airseeker.
+    /// @notice In an imaginary array consisting of the the active data feed
+    /// IDs and active dAPI names, picks the index-th identifier, and returns
+    /// all data that is available the respective data feed. Whenever data is
+    /// not available (including the case where index does not correspond to an
+    /// active data feed), returns empty values.
+    /// @dev Airseeker uses this function to get all the data it needs about an
+    /// active data feed with a single RPC call
+    /// @param index Index
+    /// @return dataFeedId Data feed ID
+    /// @return dapiName dAPI name (`bytes32(0)` if the active data feed is
+    /// identified by a data feed ID)
+    /// @return dataFeedDetails Data feed details
+    /// @return dataFeedValue Data feed value read from Api3ServerV1
+    /// @return dataFeedTimestamp Data feed timestamp read from Api3ServerV1
+    /// @return beaconValues Beacon values read from Api3ServerV1
+    /// @return beaconTimestamps Beacon timestamps read from Api3ServerV1
+    /// @return updateParameters Update parameters
+    /// @return signedApiUrls Signed API URLs of the Beacon Airnodes
     function activeDataFeed(
         uint256 index
     )
@@ -363,20 +404,30 @@ contract AirseekerRegistry is
         }
     }
 
+    /// @notice Returns the number of active data feeds identified by a data
+    /// feed ID or dAPI name
+    /// @return Active data feed count
     function activeDataFeedCount() external view override returns (uint256) {
         return activeDataFeedIdCount() + activeDapiNameCount();
     }
 
+    /// @notice Returns the number of active data feeds identified by a data
+    /// feed ID
+    /// @return Active data feed ID count
     function activeDataFeedIdCount() public view override returns (uint256) {
         return activeDataFeedIds.length();
     }
 
+    /// @notice Returns the number of active data feeds identified by a dAPI
+    /// name
+    /// @return Active dAPI name count
     function activeDapiNameCount() public view override returns (uint256) {
         return activeDapiNames.length();
     }
 
-    // Returns "" if the update parameters are not set. The user should be
-    // recommended to compare the returned value with the used hash.
+    /// @notice Data feed ID to update parameters
+    /// @param dataFeedId Data feed ID
+    /// @return updateParameters Update parameters
     function dataFeedIdToUpdateParameters(
         bytes32 dataFeedId
     ) public view override returns (bytes memory updateParameters) {
@@ -385,8 +436,9 @@ contract AirseekerRegistry is
         ];
     }
 
-    // Returns "" if the update parameters are not set. The user should be
-    // recommended to compare the returned value with the used hash.
+    /// @notice dAPI name to update parameters
+    /// @param dapiName dAPI name
+    /// @return updateParameters Update parameters
     function dapiNameToUpdateParameters(
         bytes32 dapiName
     ) public view override returns (bytes memory updateParameters) {
@@ -395,14 +447,19 @@ contract AirseekerRegistry is
         ];
     }
 
-    // This is cheaper to use than fetching the entire details and checking its
-    // length
+    /// @notice Returns if the data feed with ID is registered
+    /// @param dataFeedId Data feed ID
+    /// @return If the data feed with ID is registered
     function dataFeedIsRegistered(
         bytes32 dataFeedId
     ) external view override returns (bool) {
         return dataFeedIdToDetails[dataFeedId].length != 0;
     }
 
+    /// @notice Derives the Beacon ID of an Airnode address and template ID
+    /// pair
+    /// @param airnode Airnode address
+    /// @param templateId Template ID
     function deriveBeaconId(
         address airnode,
         bytes32 templateId
@@ -410,6 +467,9 @@ contract AirseekerRegistry is
         beaconId = keccak256(abi.encodePacked(airnode, templateId));
     }
 
+    /// @notice Derives the Beacon set ID of a Beacon IDs array
+    /// @param beaconIds Beacon IDs
+    /// @return beaconSetId Beacon set ID
     function deriveBeaconSetId(
         bytes32[] memory beaconIds
     ) private pure returns (bytes32 beaconSetId) {
