@@ -858,7 +858,7 @@ describe('Api3Market', function () {
                 });
               });
               context('Subscription is not added to the start of the queue', function () {
-                context('Queue does not need to be flushed', function () {
+                context('Current subscription ID does not need to be updated', function () {
                   it('buys subscription', async function () {
                     const {
                       roles,
@@ -1014,8 +1014,8 @@ describe('Api3Market', function () {
                     ]);
                   });
                 });
-                context('Queue needs to be flushed', function () {
-                  it('buys subscription and flushes the queue', async function () {
+                context('Current subscription ID needs to be updated', function () {
+                  it('buys subscription and updates the current subscription ID', async function () {
                     const {
                       roles,
                       api3ServerV1,
@@ -2426,11 +2426,11 @@ describe('Api3Market', function () {
     });
   });
 
-  describe('flushSubscriptionQueue', function () {
+  describe('updateCurrentSubscriptionId', function () {
     context('dAPI subscription queue is not empty', function () {
-      context('Current subscription needs to be flushed', function () {
-        context('Queue will be empty after the flush', function () {
-          it('flushes the queue and deactivates the dAPI', async function () {
+      context('Current subscription ID needs to be updated', function () {
+        context('Queue will be empty after the current subscription ID is updated', function () {
+          it('updates the current subscription ID and deactivates the dAPI', async function () {
             const {
               roles,
               api3ServerV1,
@@ -2537,7 +2537,7 @@ describe('Api3Market', function () {
             await expect(
               api3Market
                 .connect(roles.randomPerson)
-                .flushSubscriptionQueue(dapiManagementMerkleLeaves.ethUsd.values.dapiName)
+                .updateCurrentSubscriptionId(dapiManagementMerkleLeaves.ethUsd.values.dapiName)
             )
               .to.emit(api3Market, 'UpdatedCurrentSubscriptionId')
               .withArgs(dapiManagementMerkleLeaves.ethUsd.values.dapiName, ethers.ZeroHash)
@@ -2558,8 +2558,8 @@ describe('Api3Market', function () {
             expect(dapiData.dailyPrices).to.deep.equal([]);
           });
         });
-        context('Queue will not be empty after the flush', function () {
-          it('flushes the queue and updates the update parameters', async function () {
+        context('Queue will not be empty after the current subscription ID is updated', function () {
+          it('updates the subscription ID and updates the update parameters', async function () {
             const {
               roles,
               api3ServerV1,
@@ -2669,7 +2669,7 @@ describe('Api3Market', function () {
             await expect(
               api3Market
                 .connect(roles.randomPerson)
-                .flushSubscriptionQueue(dapiManagementMerkleLeaves.ethUsd.values.dapiName)
+                .updateCurrentSubscriptionId(dapiManagementMerkleLeaves.ethUsd.values.dapiName)
             )
               .to.emit(api3Market, 'UpdatedCurrentSubscriptionId')
               .withArgs(
@@ -2715,7 +2715,7 @@ describe('Api3Market', function () {
           });
         });
       });
-      context('Current subscription does not need to be flushed', function () {
+      context('Current subscription ID does not need to be updated', function () {
         it('reverts', async function () {
           const {
             roles,
@@ -2758,7 +2758,7 @@ describe('Api3Market', function () {
           await expect(
             api3Market
               .connect(roles.randomPerson)
-              .flushSubscriptionQueue(dapiManagementMerkleLeaves.ethUsd.values.dapiName)
+              .updateCurrentSubscriptionId(dapiManagementMerkleLeaves.ethUsd.values.dapiName)
           ).to.be.revertedWith('Current subscription not ended');
         });
       });
@@ -2769,7 +2769,7 @@ describe('Api3Market', function () {
         await expect(
           api3Market
             .connect(roles.randomPerson)
-            .flushSubscriptionQueue(dapiManagementMerkleLeaves.ethUsd.values.dapiName)
+            .updateCurrentSubscriptionId(dapiManagementMerkleLeaves.ethUsd.values.dapiName)
         ).to.be.revertedWith('Subscription queue empty');
       });
     });

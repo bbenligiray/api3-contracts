@@ -32,7 +32,7 @@ interface IApi3Market is IHashRegistry, IExtendedSelfMulticall {
         bytes calldata dapiPricingMerkleData
     ) external payable returns (bytes32 subscriptionId);
 
-    function flushSubscriptionQueue(bytes32 dapiName) external;
+    function updateCurrentSubscriptionId(bytes32 dapiName) external;
 
     function updateDapiName(
         bytes32 dapiName,

@@ -231,7 +231,7 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
     /// should poll this function for all active dAPI names and call it
     /// whenever it is not going to revert.
     /// @param dapiName dAPI name
-    function flushSubscriptionQueue(bytes32 dapiName) public override {
+    function updateCurrentSubscriptionId(bytes32 dapiName) public override {
         bytes32 currentSubscriptionId = dapiNameToCurrentSubscriptionId[
             dapiName
         ];
@@ -244,7 +244,7 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
                 block.timestamp,
             "Current subscription not ended"
         );
-        _flushSubscriptionQueue(dapiName, currentSubscriptionId);
+        _updateCurrentSubscriptionId(dapiName, currentSubscriptionId);
     }
 
     // For all active dAPIs, our bot should call this whenever it won't revert.
@@ -597,12 +597,12 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
                 subscriptions[currentSubscriptionId].endTimestamp <=
                 block.timestamp
             ) {
-                _flushSubscriptionQueue(dapiName, currentSubscriptionId);
+                _updateCurrentSubscriptionId(dapiName, currentSubscriptionId);
             }
         }
     }
 
-    function _flushSubscriptionQueue(
+    function _updateCurrentSubscriptionId(
         bytes32 dapiName,
         bytes32 currentSubscriptionId
     ) private {
