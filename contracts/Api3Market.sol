@@ -4,11 +4,37 @@ pragma solidity 0.8.17;
 import "./HashRegistry.sol";
 import "@api3/airnode-protocol-v1/contracts/utils/ExtendedSelfMulticall.sol";
 import "./interfaces/IApi3Market.sol";
-import "./vendor/@openzeppelin/contracts@4.9.5/utils/cryptography/MerkleProof.sol";
 import "./AirseekerRegistry.sol";
+import "./vendor/@openzeppelin/contracts@4.9.5/utils/cryptography/MerkleProof.sol";
 import "@api3/airnode-protocol-v1/contracts/api3-server-v1/interfaces/IApi3ServerV1.sol";
 import "@api3/airnode-protocol-v1/contracts/api3-server-v1/proxies/interfaces/IProxyFactory.sol";
 
+/// @title The contract that API3 users interact with using the API3 Market
+/// frontend to purchase data feed subscriptions
+/// @notice API3 aims to streamline and protocolize its sales and integration
+/// processes through the API3 Market (https://market.api3.org), which is a
+/// data feed subscription marketplace. The Api3Market contract is the on-chain
+/// portion of this system.
+/// Api3Market enables API3 to predetermine the decisions related to its data
+/// feed services (such as the curation of data feed sources or subscription
+/// prices) and publish them on-chain. This greatly streamlines the user flow,
+/// as it allows the users to initiate subscriptions immediately, without
+/// requiring any two-way communication with API3. Furthermore, this removes
+/// the need for API3 to have agents operating in the meatspace gathering order
+/// details, quoting prices and reviewing payments, and allows all such
+/// operations to be cryptographically secured with a multi-party scheme in an
+/// end-to-end manner.
+/// @dev The user is strongly recommended to use the API3 Market frontend while
+/// interacting with this contract, mostly because doing so successfully
+/// requires some amount of knowledge of other API3 contracts. Specifically,
+/// Api3Market requires the data feed for which the subscription is being
+/// purchased to be "readied", the correct Merkle proofs to be provided, and
+/// enough payment to be made. The API3 Market frontend will fetch the
+/// appropriate Merkle proofs, create a multicall transaction that will ready
+/// the data feed before making the call to buy the subscription, and compute
+/// the amount to be sent that will barely allow the subscription to be
+/// purchased. For most users, building such a transaction themselves would be
+/// too impractical.
 contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
     enum UpdateParametersComparisonResult {
         EqualToQueued,
@@ -16,6 +42,11 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
         WorseThanQueued
     }
 
+    // The update parameters for each subscription is kept in a hash map rather
+    // than in long form as an optimization, refer to AirseekerRegistry for a
+    // similar implementation.
+    // The subscription queues are kept as linked lists, for which each
+    // subscription has a next subscription ID.
     struct Subscription {
         bytes32 updateParametersHash;
         uint32 endTimestamp;
@@ -23,44 +54,69 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
         bytes32 nextSubscriptionId;
     }
 
-    // We allow a subscription queue of 5. We only need as many as the number
-    // of tiers we have (currently 3: 1%, 0.5%, 0.25%).
-    // As a note, there may be an off-by-one error here (in that the maximum
-    // queue length is actually 4 or 6).
+    /// @notice Maximum subscription queue length for a dAPI
+    /// @dev Some functionality in this contract requires to iterate through
+    /// the entire subscription queue for a dAPI, and the queue length is
+    /// limited to prevent this process from being bloated. Considering that
+    /// each item in the subscription queue has unique update parameters, the
+    /// length of the subscription queue is also limited by the number of
+    /// unique update parameters offered in the dAPI pricing Merkle tree. For
+    /// reference, at the time this contract is implemented, the API3 Market
+    /// offers 4 update parameter options, and this number is not expected to
+    /// be increased (i.e., we do not expect this queue length limit to be hit
+    /// in practice).
     uint256 public constant override MAXIMUM_SUBSCRIPTION_QUEUE_LENGTH = 5;
 
+    /// @notice dAPI management Merkle root hash type
+    /// @dev "Hash type" is what HashRegistry uses to address hashes used for
+    /// different purposes, refer to it for details
     bytes32 public constant override DAPI_MANAGEMENT_MERKLE_ROOT_HASH_TYPE =
         keccak256(abi.encodePacked("dAPI management Merkle root"));
 
+    /// @notice dAPI pricing Merkle root hash type
     bytes32 public constant override DAPI_PRICING_MERKLE_ROOT_HASH_TYPE =
         keccak256(abi.encodePacked("dAPI pricing Merkle root"));
 
+    /// @notice Signed API URL Merkle root hash type
     bytes32 public constant override SIGNED_API_URL_MERKLE_ROOT_HASH_TYPE =
         keccak256(abi.encodePacked("Signed API URL Merkle root"));
 
+    /// @notice Maximum dAPI update age. This contract cannot be used to set a
+    /// dAPI name to a data feed that has not been updated in the last
+    /// `MAXIMUM_DAPI_UPDATE_AGE`.
     uint256 public constant override MAXIMUM_DAPI_UPDATE_AGE = 1 days;
 
+    /// @notice Api3ServerV1 contract address
     address public immutable override api3ServerV1;
 
+    /// @notice ProxyFactory contract address
     address public immutable override proxyFactory;
 
+    /// @notice AirseekerRegistry contract address
     address public immutable override airseekerRegistry;
 
-    // Keeping the subscriptions as a linked list
+    /// @notice Subscriptions indexed by their IDs
     mapping(bytes32 => Subscription) public override subscriptions;
 
-    // Where the subscription queue starts per dAPI name
+    /// @notice dAPI name to current subscription ID, which denotes the start
+    /// of the subscription queue for the dAPI
     mapping(bytes32 => bytes32) public override dapiNameToCurrentSubscriptionId;
 
-    // There will be a very limited variety of update parameters so using their
-    // hashes as a shorthand is a good optimization
-    mapping(bytes32 => bytes) public override updateParametersHashToValue;
+    // Update parameters hash map
+    mapping(bytes32 => bytes) private updateParametersHashToValue;
 
+    // Length of abi.encode(address, bytes32)
     uint256 private constant DATA_FEED_DETAILS_LENGTH_FOR_SINGLE_BEACON =
         32 + 32;
 
+    // Length of abi.encode(uint256, int224, uint256)
     uint256 private constant UPDATE_PARAMETERS_LENGTH = 32 + 32 + 32;
 
+    /// @dev Deploys its own AirseekerRegistry deterministically. This implies
+    /// that Api3Market-specific Airseekers should be operated pointed at this
+    /// contract.
+    /// @param owner_ Owner address
+    /// @param proxyFactory_ ProxyFactory contract address
     constructor(address owner_, address proxyFactory_) HashRegistry(owner_) {
         proxyFactory = proxyFactory_;
         api3ServerV1 = IProxyFactory(proxyFactory_).api3ServerV1();
@@ -69,6 +125,8 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
         );
     }
 
+    /// @notice Returns the owner address
+    /// @return Owner address
     function owner()
         public
         view
@@ -90,6 +148,29 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
         revert("Ownership cannot be transferred");
     }
 
+    /// @notice Buys subscription and updates the current subscription ID if
+    /// necessary. The user is recommended to only interact with this contract
+    /// over the API3 Market frontend due to its complexity.
+    /// @dev In the case that the subscription being purchased will become the
+    /// current one, the respective data feed must be readied before calling
+    /// this function.
+    /// Enough funds must be sent to put the sponsor wallet balance over its
+    /// expected amount after the subscription is bought. Since sponsor wallets
+    /// send data feed update transactions, it is not possible to estimate what
+    /// their balance will be at the time sent transactions are confirmed. To
+    /// avoid transactions being reverted as a result of this, consider sending
+    /// some extra.
+    /// @param dapiName dAPI name
+    /// @param dataFeedId Data feed ID
+    /// @param sponsorWallet Sponsor wallet address
+    /// @param dapiManagementMerkleData ABI-encoded dAPI management Merkle root
+    /// and proof
+    /// @param updateParameters Update parameters
+    /// @param duration Subscription duration
+    /// @param price Subscription price
+    /// @param dapiPricingMerkleData ABI-encoded dAPI pricing Merkle root and
+    /// proof
+    /// @return subscriptionId Subscription ID
     function buySubscription(
         bytes32 dapiName,
         bytes32 dataFeedId,
@@ -143,7 +224,13 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
         }
     }
 
-    // For all active dAPIs, our bot should call this whenever it won't revert
+    /// @notice If the current subscription has ended, updates it with the one
+    /// that will end next
+    /// @dev The fact that there is a current subscription that has ended means
+    /// that API3 is providing a service that was not paid for. Therefore, API3
+    /// should poll this function for all active dAPI names and call it
+    /// whenever it is not going to revert.
+    /// @param dapiName dAPI name
     function flushSubscriptionQueue(bytes32 dapiName) public override {
         bytes32 currentSubscriptionId = dapiNameToCurrentSubscriptionId[
             dapiName

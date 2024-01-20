@@ -148,8 +148,4 @@ interface IApi3Market is IHashRegistry, IExtendedSelfMulticall {
     function dapiNameToCurrentSubscriptionId(
         bytes32 dapiName
     ) external view returns (bytes32 currentSubscriptionId);
-
-    function updateParametersHashToValue(
-        bytes32 updateParametersHash
-    ) external view returns (bytes memory updateParameters);
 }
