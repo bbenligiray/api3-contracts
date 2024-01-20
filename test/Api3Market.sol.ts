@@ -859,90 +859,24 @@ describe('Api3Market', function () {
               });
               context('Subscription is not added to the start of the queue', function () {
                 context('Current subscription ID does not need to be updated', function () {
-                  it('buys subscription', async function () {
-                    const {
-                      roles,
-                      api3ServerV1,
-                      beaconIds,
-                      dataFeedDetails,
-                      api3Market,
-                      airseekerRegistry,
-                      dapiManagementMerkleLeaves,
-                      dapiManagementMerkleRoot,
-                      dapiPricingMerkleLeaves,
-                      dapiPricingMerkleRoot,
-                    } = await helpers.loadFixture(deploy);
-                    await api3Market.connect(roles.randomPerson).registerDataFeed(dataFeedDetails);
-                    const subscriptionTimestamp1 = (await helpers.time.latest()) + 1;
-                    await helpers.time.setNextBlockTimestamp(subscriptionTimestamp1);
-                    await api3Market
-                      .connect(roles.randomPerson)
-                      .buySubscription(
-                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                        dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                        dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
-                        ethers.AbiCoder.defaultAbiCoder().encode(
-                          ['bytes32', 'bytes32[]'],
-                          [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
-                        ),
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                        ethers.AbiCoder.defaultAbiCoder().encode(
-                          ['bytes32', 'bytes32[]'],
-                          [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
-                        ),
-                        {
-                          value: await computeRequiredPaymentAmount(
-                            api3Market,
-                            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
-                          ),
-                        }
-                      );
-                    const paymentAmount2 = await computeRequiredPaymentAmount(
-                      api3Market,
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                      dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                      dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
-                      dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
-                    );
-                    const subscriptionTimestamp2 = (await helpers.time.latest()) + 1;
-                    await helpers.time.setNextBlockTimestamp(subscriptionTimestamp2);
-                    const subscriptionId = computeSubscriptionId(
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters
-                    );
-                    expect(
+                  context('dAPI name needs to be updated', function () {
+                    it('updates dAPI name and buys subscription', async function () {
+                      const {
+                        roles,
+                        api3ServerV1,
+                        beaconIds,
+                        dataFeedDetails,
+                        api3Market,
+                        airseekerRegistry,
+                        dapiManagementMerkleLeaves,
+                        dapiManagementMerkleRoot,
+                        dapiPricingMerkleLeaves,
+                        dapiPricingMerkleRoot,
+                      } = await helpers.loadFixture(deploy);
+                      await api3Market.connect(roles.randomPerson).registerDataFeed(dataFeedDetails);
+                      const subscriptionTimestamp1 = (await helpers.time.latest()) + 1;
+                      await helpers.time.setNextBlockTimestamp(subscriptionTimestamp1);
                       await api3Market
-                        .connect(roles.randomPerson)
-                        .buySubscription.staticCall(
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
-                          ethers.AbiCoder.defaultAbiCoder().encode(
-                            ['bytes32', 'bytes32[]'],
-                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
-                          ),
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
-                          ethers.AbiCoder.defaultAbiCoder().encode(
-                            ['bytes32', 'bytes32[]'],
-                            [
-                              dapiPricingMerkleRoot,
-                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof,
-                            ]
-                          ),
-                          { value: paymentAmount2 }
-                        )
-                    ).to.equal(subscriptionId);
-                    await expect(
-                      api3Market
                         .connect(roles.randomPerson)
                         .buySubscription(
                           dapiManagementMerkleLeaves.ethUsd.values.dapiName,
@@ -952,188 +886,164 @@ describe('Api3Market', function () {
                             ['bytes32', 'bytes32[]'],
                             [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
                           ),
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
                             [
                               dapiPricingMerkleRoot,
-                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof,
                             ]
                           ),
-                          { value: paymentAmount2 }
-                        )
-                    )
-                      .to.emit(api3Market, 'BoughtSubscription')
-                      .withArgs(
+                          {
+                            value: await computeRequiredPaymentAmount(
+                              api3Market,
+                              dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                              dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                            ),
+                          }
+                        );
+                      const paymentAmount2 = await computeRequiredPaymentAmount(
+                        api3Market,
                         dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                        subscriptionId,
-                        dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                        dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
                         dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
                         dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
                         dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
-                        paymentAmount2
-                      )
-                      .to.not.emit(api3Market, 'UpdatedCurrentSubscriptionId')
-                      .to.not.emit(airseekerRegistry, 'UpdatedDapiNameUpdateParameters')
-                      .to.not.emit(airseekerRegistry, 'ActivatedDapiName')
-                      .to.not.emit(api3ServerV1, 'SetDapiName');
-                    const dataFeedReading = await api3ServerV1.dataFeeds(
-                      dapiManagementMerkleLeaves.ethUsd.values.dataFeedId
-                    );
-                    const beaconReadings = await readBeacons(api3ServerV1, beaconIds);
-                    const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd.values.dapiName);
-                    expect(dapiData.dataFeedDetails).to.equal(dataFeedDetails);
-                    expect(dapiData.dapiValue).to.equal(dataFeedReading.value);
-                    expect(dapiData.dapiTimestamp).to.equal(dataFeedReading.timestamp);
-                    expect(dapiData.beaconValues).to.deep.equal(
-                      beaconReadings.map((beaconReading) => beaconReading.value)
-                    );
-                    expect(dapiData.beaconTimestamps).to.deep.equal(
-                      beaconReadings.map((beaconReading) => beaconReading.timestamp)
-                    );
-                    expect(dapiData.updateParameters).to.deep.equal([
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                      dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                    ]);
-                    expect(dapiData.endTimestamps).to.deep.equal([
-                      subscriptionTimestamp1 +
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                      subscriptionTimestamp2 +
-                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                    ]);
-                    expect(dapiData.dailyPrices).to.deep.equal([
-                      (BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price) *
-                        BigInt(24 * 60 * 60)) /
-                        BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration),
-                      (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price) *
-                        BigInt(24 * 60 * 60)) /
-                        BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration),
-                    ]);
-                  });
-                });
-                context('Current subscription ID needs to be updated', function () {
-                  it('buys subscription and updates the current subscription ID', async function () {
-                    const {
-                      roles,
-                      api3ServerV1,
-                      beaconIds,
-                      dataFeedDetails,
-                      api3Market,
-                      airseekerRegistry,
-                      dapiManagementMerkleLeaves,
-                      dapiManagementMerkleRoot,
-                      dapiPricingMerkleLeaves,
-                      dapiPricingMerkleRoot,
-                    } = await helpers.loadFixture(deploy);
-                    await api3Market.connect(roles.randomPerson).registerDataFeed(dataFeedDetails);
-                    const subscriptionTimestamp1 = (await helpers.time.latest()) + 1;
-                    await helpers.time.setNextBlockTimestamp(subscriptionTimestamp1);
-                    await api3Market
-                      .connect(roles.randomPerson)
-                      .buySubscription(
-                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                        dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                        dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
-                        ethers.AbiCoder.defaultAbiCoder().encode(
-                          ['bytes32', 'bytes32[]'],
-                          [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
-                        ),
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                        ethers.AbiCoder.defaultAbiCoder().encode(
-                          ['bytes32', 'bytes32[]'],
-                          [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
-                        ),
-                        {
-                          value: await computeRequiredPaymentAmount(
-                            api3Market,
-                            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
-                          ),
-                        }
+                        dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
                       );
-                    const subscriptionTimestamp2 = (await helpers.time.latest()) + 1;
-                    await helpers.time.setNextBlockTimestamp(subscriptionTimestamp2);
-                    await api3Market
-                      .connect(roles.randomPerson)
-                      .buySubscription(
+                      await api3ServerV1
+                        .connect(roles.api3ServerV1Manager)
+                        .setDapiName(dapiManagementMerkleLeaves.ethUsd.values.dapiName, ethers.ZeroHash);
+                      const subscriptionTimestamp2 = (await helpers.time.latest()) + 1;
+                      await helpers.time.setNextBlockTimestamp(subscriptionTimestamp2);
+                      const subscriptionId = computeSubscriptionId(
                         dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                        dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                        dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
-                        ethers.AbiCoder.defaultAbiCoder().encode(
-                          ['bytes32', 'bytes32[]'],
-                          [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
-                        ),
-                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
-                        ethers.AbiCoder.defaultAbiCoder().encode(
-                          ['bytes32', 'bytes32[]'],
-                          [
-                            dapiPricingMerkleRoot,
-                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof,
-                          ]
-                        ),
-                        {
-                          value: await computeRequiredPaymentAmount(
-                            api3Market,
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters
+                      );
+                      expect(
+                        await api3Market
+                          .connect(roles.randomPerson)
+                          .buySubscription.staticCall(
                             dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
+                            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                            ethers.AbiCoder.defaultAbiCoder().encode(
+                              ['bytes32', 'bytes32[]'],
+                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                            ),
                             dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
                             dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
                             dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
-                            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
-                          ),
-                        }
-                      );
-                    const paymentAmount3 = await computeRequiredPaymentAmount(
-                      api3Market,
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
-                      dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-                      dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
-                      dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
-                    );
-                    const subscriptionTimestamp3 =
-                      subscriptionTimestamp1 +
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration;
-                    await helpers.time.setNextBlockTimestamp(subscriptionTimestamp3);
-                    const subscriptionId = computeSubscriptionId(
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters
-                    );
-                    expect(
-                      await api3Market
-                        .connect(roles.randomPerson)
-                        .buySubscription.staticCall(
+                            ethers.AbiCoder.defaultAbiCoder().encode(
+                              ['bytes32', 'bytes32[]'],
+                              [
+                                dapiPricingMerkleRoot,
+                                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof,
+                              ]
+                            ),
+                            { value: paymentAmount2 }
+                          )
+                      ).to.equal(subscriptionId);
+                      await expect(
+                        api3Market
+                          .connect(roles.randomPerson)
+                          .buySubscription(
+                            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
+                            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                            ethers.AbiCoder.defaultAbiCoder().encode(
+                              ['bytes32', 'bytes32[]'],
+                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                            ),
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+                            ethers.AbiCoder.defaultAbiCoder().encode(
+                              ['bytes32', 'bytes32[]'],
+                              [
+                                dapiPricingMerkleRoot,
+                                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof,
+                              ]
+                            ),
+                            { value: paymentAmount2 }
+                          )
+                      )
+                        .to.emit(api3ServerV1, 'SetDapiName')
+                        .withArgs(
+                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
                           dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                          await api3Market.getAddress()
+                        )
+                        .to.emit(api3Market, 'BoughtSubscription')
+                        .withArgs(
+                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                          subscriptionId,
                           dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
                           dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
-                          ethers.AbiCoder.defaultAbiCoder().encode(
-                            ['bytes32', 'bytes32[]'],
-                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
-                          ),
-                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
-                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
-                          ethers.AbiCoder.defaultAbiCoder().encode(
-                            ['bytes32', 'bytes32[]'],
-                            [
-                              dapiPricingMerkleRoot,
-                              dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.proof,
-                            ]
-                          ),
-                          { value: paymentAmount3 }
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+                          paymentAmount2
                         )
-                    ).to.equal(subscriptionId);
-                    await expect(
-                      api3Market
+                        .to.not.emit(api3Market, 'UpdatedCurrentSubscriptionId')
+                        .to.not.emit(airseekerRegistry, 'UpdatedDapiNameUpdateParameters')
+                        .to.not.emit(airseekerRegistry, 'ActivatedDapiName');
+                      const dataFeedReading = await api3ServerV1.dataFeeds(
+                        dapiManagementMerkleLeaves.ethUsd.values.dataFeedId
+                      );
+                      const beaconReadings = await readBeacons(api3ServerV1, beaconIds);
+                      const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd.values.dapiName);
+                      expect(dapiData.dataFeedDetails).to.equal(dataFeedDetails);
+                      expect(dapiData.dapiValue).to.equal(dataFeedReading.value);
+                      expect(dapiData.dapiTimestamp).to.equal(dataFeedReading.timestamp);
+                      expect(dapiData.beaconValues).to.deep.equal(
+                        beaconReadings.map((beaconReading) => beaconReading.value)
+                      );
+                      expect(dapiData.beaconTimestamps).to.deep.equal(
+                        beaconReadings.map((beaconReading) => beaconReading.timestamp)
+                      );
+                      expect(dapiData.updateParameters).to.deep.equal([
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
+                      ]);
+                      expect(dapiData.endTimestamps).to.deep.equal([
+                        subscriptionTimestamp1 +
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
+                        subscriptionTimestamp2 +
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
+                      ]);
+                      expect(dapiData.dailyPrices).to.deep.equal([
+                        (BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price) *
+                          BigInt(24 * 60 * 60)) /
+                          BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration),
+                        (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price) *
+                          BigInt(24 * 60 * 60)) /
+                          BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration),
+                      ]);
+                    });
+                  });
+                  context('dAPI name does not need to be updated', function () {
+                    it('buys subscription', async function () {
+                      const {
+                        roles,
+                        api3ServerV1,
+                        beaconIds,
+                        dataFeedDetails,
+                        api3Market,
+                        airseekerRegistry,
+                        dapiManagementMerkleLeaves,
+                        dapiManagementMerkleRoot,
+                        dapiPricingMerkleLeaves,
+                        dapiPricingMerkleRoot,
+                      } = await helpers.loadFixture(deploy);
+                      await api3Market.connect(roles.randomPerson).registerDataFeed(dataFeedDetails);
+                      const subscriptionTimestamp1 = (await helpers.time.latest()) + 1;
+                      await helpers.time.setNextBlockTimestamp(subscriptionTimestamp1);
+                      await api3Market
                         .connect(roles.randomPerson)
                         .buySubscription(
                           dapiManagementMerkleLeaves.ethUsd.values.dapiName,
@@ -1143,77 +1053,579 @@ describe('Api3Market', function () {
                             ['bytes32', 'bytes32[]'],
                             [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
                           ),
-                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
-                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
                             [
                               dapiPricingMerkleRoot,
-                              dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.proof,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof,
                             ]
                           ),
-                          { value: paymentAmount3 }
-                        )
-                    )
-                      .to.emit(api3Market, 'UpdatedCurrentSubscriptionId')
-                      .withArgs(
+                          {
+                            value: await computeRequiredPaymentAmount(
+                              api3Market,
+                              dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                              dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                            ),
+                          }
+                        );
+                      const paymentAmount2 = await computeRequiredPaymentAmount(
+                        api3Market,
                         dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                        computeSubscriptionId(
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters
-                        )
-                      )
-                      .to.emit(airseekerRegistry, 'UpdatedDapiNameUpdateParameters')
-                      .withArgs(
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+                        dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                      );
+                      const subscriptionTimestamp2 = (await helpers.time.latest()) + 1;
+                      await helpers.time.setNextBlockTimestamp(subscriptionTimestamp2);
+                      const subscriptionId = computeSubscriptionId(
                         dapiManagementMerkleLeaves.ethUsd.values.dapiName,
                         dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters
+                      );
+                      expect(
+                        await api3Market
+                          .connect(roles.randomPerson)
+                          .buySubscription.staticCall(
+                            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
+                            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                            ethers.AbiCoder.defaultAbiCoder().encode(
+                              ['bytes32', 'bytes32[]'],
+                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                            ),
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+                            ethers.AbiCoder.defaultAbiCoder().encode(
+                              ['bytes32', 'bytes32[]'],
+                              [
+                                dapiPricingMerkleRoot,
+                                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof,
+                              ]
+                            ),
+                            { value: paymentAmount2 }
+                          )
+                      ).to.equal(subscriptionId);
+                      await expect(
+                        api3Market
+                          .connect(roles.randomPerson)
+                          .buySubscription(
+                            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
+                            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                            ethers.AbiCoder.defaultAbiCoder().encode(
+                              ['bytes32', 'bytes32[]'],
+                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                            ),
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+                            ethers.AbiCoder.defaultAbiCoder().encode(
+                              ['bytes32', 'bytes32[]'],
+                              [
+                                dapiPricingMerkleRoot,
+                                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof,
+                              ]
+                            ),
+                            { value: paymentAmount2 }
+                          )
                       )
-                      .to.emit(api3Market, 'BoughtSubscription')
-                      .withArgs(
+                        .to.emit(api3Market, 'BoughtSubscription')
+                        .withArgs(
+                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                          subscriptionId,
+                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+                          paymentAmount2
+                        )
+                        .to.not.emit(api3Market, 'UpdatedCurrentSubscriptionId')
+                        .to.not.emit(airseekerRegistry, 'UpdatedDapiNameUpdateParameters')
+                        .to.not.emit(airseekerRegistry, 'ActivatedDapiName')
+                        .to.not.emit(api3ServerV1, 'SetDapiName');
+                      const dataFeedReading = await api3ServerV1.dataFeeds(
+                        dapiManagementMerkleLeaves.ethUsd.values.dataFeedId
+                      );
+                      const beaconReadings = await readBeacons(api3ServerV1, beaconIds);
+                      const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd.values.dapiName);
+                      expect(dapiData.dataFeedDetails).to.equal(dataFeedDetails);
+                      expect(dapiData.dapiValue).to.equal(dataFeedReading.value);
+                      expect(dapiData.dapiTimestamp).to.equal(dataFeedReading.timestamp);
+                      expect(dapiData.beaconValues).to.deep.equal(
+                        beaconReadings.map((beaconReading) => beaconReading.value)
+                      );
+                      expect(dapiData.beaconTimestamps).to.deep.equal(
+                        beaconReadings.map((beaconReading) => beaconReading.timestamp)
+                      );
+                      expect(dapiData.updateParameters).to.deep.equal([
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
+                      ]);
+                      expect(dapiData.endTimestamps).to.deep.equal([
+                        subscriptionTimestamp1 +
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
+                        subscriptionTimestamp2 +
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
+                      ]);
+                      expect(dapiData.dailyPrices).to.deep.equal([
+                        (BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price) *
+                          BigInt(24 * 60 * 60)) /
+                          BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration),
+                        (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price) *
+                          BigInt(24 * 60 * 60)) /
+                          BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration),
+                      ]);
+                    });
+                  });
+                });
+                context('Current subscription ID needs to be updated', function () {
+                  context('dAPI name needs to be updated', function () {
+                    it('updates current subscription ID, updates dAPI name and buys subscription', async function () {
+                      const {
+                        roles,
+                        airnodes,
+                        api3ServerV1,
+                        beaconIds,
+                        dataFeedDetails,
+                        api3Market,
+                        airseekerRegistry,
+                        dapiManagementMerkleLeaves,
+                        dapiManagementMerkleRoot,
+                        dapiPricingMerkleLeaves,
+                        dapiPricingMerkleRoot,
+                      } = await helpers.loadFixture(deploy);
+                      await api3Market.connect(roles.randomPerson).registerDataFeed(dataFeedDetails);
+                      const subscriptionTimestamp1 = (await helpers.time.latest()) + 1;
+                      await helpers.time.setNextBlockTimestamp(subscriptionTimestamp1);
+                      await api3Market
+                        .connect(roles.randomPerson)
+                        .buySubscription(
+                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                          ethers.AbiCoder.defaultAbiCoder().encode(
+                            ['bytes32', 'bytes32[]'],
+                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                          ),
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                          ethers.AbiCoder.defaultAbiCoder().encode(
+                            ['bytes32', 'bytes32[]'],
+                            [
+                              dapiPricingMerkleRoot,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof,
+                            ]
+                          ),
+                          {
+                            value: await computeRequiredPaymentAmount(
+                              api3Market,
+                              dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                              dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                            ),
+                          }
+                        );
+                      const subscriptionTimestamp2 = (await helpers.time.latest()) + 1;
+                      await helpers.time.setNextBlockTimestamp(subscriptionTimestamp2);
+                      await api3Market
+                        .connect(roles.randomPerson)
+                        .buySubscription(
+                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                          ethers.AbiCoder.defaultAbiCoder().encode(
+                            ['bytes32', 'bytes32[]'],
+                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                          ),
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+                          ethers.AbiCoder.defaultAbiCoder().encode(
+                            ['bytes32', 'bytes32[]'],
+                            [
+                              dapiPricingMerkleRoot,
+                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof,
+                            ]
+                          ),
+                          {
+                            value: await computeRequiredPaymentAmount(
+                              api3Market,
+                              dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
+                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
+                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+                              dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                            ),
+                          }
+                        );
+                      const paymentAmount3 = await computeRequiredPaymentAmount(
+                        api3Market,
                         dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                        subscriptionId,
-                        dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                        dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
                         dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
                         dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
                         dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
-                        paymentAmount3
+                        dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                      );
+                      await api3ServerV1
+                        .connect(roles.api3ServerV1Manager)
+                        .setDapiName(dapiManagementMerkleLeaves.ethUsd.values.dapiName, ethers.ZeroHash);
+                      const subscriptionTimestamp3 =
+                        subscriptionTimestamp1 +
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration;
+                      await helpers.time.setNextBlockTimestamp(subscriptionTimestamp3 - 60);
+                      await updateBeaconSet(
+                        api3ServerV1,
+                        'ETH/USD',
+                        airnodes,
+                        subscriptionTimestamp3 - 60,
+                        ethers.parseEther('2200')
+                      );
+                      await helpers.time.setNextBlockTimestamp(subscriptionTimestamp3);
+                      const subscriptionId = computeSubscriptionId(
+                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters
+                      );
+                      expect(
+                        await api3Market
+                          .connect(roles.randomPerson)
+                          .buySubscription.staticCall(
+                            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
+                            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                            ethers.AbiCoder.defaultAbiCoder().encode(
+                              ['bytes32', 'bytes32[]'],
+                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                            ),
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values
+                              .updateParameters,
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
+                            ethers.AbiCoder.defaultAbiCoder().encode(
+                              ['bytes32', 'bytes32[]'],
+                              [
+                                dapiPricingMerkleRoot,
+                                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.proof,
+                              ]
+                            ),
+                            { value: paymentAmount3 }
+                          )
+                      ).to.equal(subscriptionId);
+                      await expect(
+                        api3Market
+                          .connect(roles.randomPerson)
+                          .buySubscription(
+                            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
+                            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                            ethers.AbiCoder.defaultAbiCoder().encode(
+                              ['bytes32', 'bytes32[]'],
+                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                            ),
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values
+                              .updateParameters,
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
+                            ethers.AbiCoder.defaultAbiCoder().encode(
+                              ['bytes32', 'bytes32[]'],
+                              [
+                                dapiPricingMerkleRoot,
+                                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.proof,
+                              ]
+                            ),
+                            { value: paymentAmount3 }
+                          )
                       )
-                      .to.not.emit(airseekerRegistry, 'ActivatedDapiName')
-                      .to.not.emit(api3ServerV1, 'SetDapiName');
-                    const dataFeedReading = await api3ServerV1.dataFeeds(
-                      dapiManagementMerkleLeaves.ethUsd.values.dataFeedId
-                    );
-                    const beaconReadings = await readBeacons(api3ServerV1, beaconIds);
-                    const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd.values.dapiName);
-                    expect(dapiData.dataFeedDetails).to.equal(dataFeedDetails);
-                    expect(dapiData.dapiValue).to.equal(dataFeedReading.value);
-                    expect(dapiData.dapiTimestamp).to.equal(dataFeedReading.timestamp);
-                    expect(dapiData.beaconValues).to.deep.equal(
-                      beaconReadings.map((beaconReading) => beaconReading.value)
-                    );
-                    expect(dapiData.beaconTimestamps).to.deep.equal(
-                      beaconReadings.map((beaconReading) => beaconReading.timestamp)
-                    );
-                    expect(dapiData.updateParameters).to.deep.equal([
-                      dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                      dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
-                    ]);
-                    expect(dapiData.endTimestamps).to.deep.equal([
-                      subscriptionTimestamp2 +
-                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                      subscriptionTimestamp3 +
+                        .to.emit(api3Market, 'UpdatedCurrentSubscriptionId')
+                        .withArgs(
+                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                          computeSubscriptionId(
+                            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters
+                          )
+                        )
+                        .to.emit(airseekerRegistry, 'UpdatedDapiNameUpdateParameters')
+                        .withArgs(
+                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters
+                        )
+                        .to.emit(api3ServerV1, 'SetDapiName')
+                        .withArgs(
+                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                          await api3Market.getAddress()
+                        )
+                        .to.emit(api3Market, 'BoughtSubscription')
+                        .withArgs(
+                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                          subscriptionId,
+                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
+                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
+                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
+                          paymentAmount3
+                        )
+                        .to.not.emit(airseekerRegistry, 'ActivatedDapiName');
+                      const dataFeedReading = await api3ServerV1.dataFeeds(
+                        dapiManagementMerkleLeaves.ethUsd.values.dataFeedId
+                      );
+                      const beaconReadings = await readBeacons(api3ServerV1, beaconIds);
+                      const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd.values.dapiName);
+                      expect(dapiData.dataFeedDetails).to.equal(dataFeedDetails);
+                      expect(dapiData.dapiValue).to.equal(dataFeedReading.value);
+                      expect(dapiData.dapiTimestamp).to.equal(dataFeedReading.timestamp);
+                      expect(dapiData.beaconValues).to.deep.equal(
+                        beaconReadings.map((beaconReading) => beaconReading.value)
+                      );
+                      expect(dapiData.beaconTimestamps).to.deep.equal(
+                        beaconReadings.map((beaconReading) => beaconReading.timestamp)
+                      );
+                      expect(dapiData.updateParameters).to.deep.equal([
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
+                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
+                      ]);
+                      expect(dapiData.endTimestamps).to.deep.equal([
+                        subscriptionTimestamp2 +
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
+                        subscriptionTimestamp3 +
+                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
+                      ]);
+                      expect(dapiData.dailyPrices).to.deep.equal([
+                        (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price) *
+                          BigInt(24 * 60 * 60)) /
+                          BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration),
+                        (BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price) *
+                          BigInt(24 * 60 * 60)) /
+                          BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration),
+                      ]);
+                    });
+                  });
+                  context('dAPI name does not need to be updated', function () {
+                    it('updates current subscription ID and buys subscription', async function () {
+                      const {
+                        roles,
+                        airnodes,
+                        api3ServerV1,
+                        beaconIds,
+                        dataFeedDetails,
+                        api3Market,
+                        airseekerRegistry,
+                        dapiManagementMerkleLeaves,
+                        dapiManagementMerkleRoot,
+                        dapiPricingMerkleLeaves,
+                        dapiPricingMerkleRoot,
+                      } = await helpers.loadFixture(deploy);
+                      await api3Market.connect(roles.randomPerson).registerDataFeed(dataFeedDetails);
+                      const subscriptionTimestamp1 = (await helpers.time.latest()) + 1;
+                      await helpers.time.setNextBlockTimestamp(subscriptionTimestamp1);
+                      await api3Market
+                        .connect(roles.randomPerson)
+                        .buySubscription(
+                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                          ethers.AbiCoder.defaultAbiCoder().encode(
+                            ['bytes32', 'bytes32[]'],
+                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                          ),
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                          ethers.AbiCoder.defaultAbiCoder().encode(
+                            ['bytes32', 'bytes32[]'],
+                            [
+                              dapiPricingMerkleRoot,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof,
+                            ]
+                          ),
+                          {
+                            value: await computeRequiredPaymentAmount(
+                              api3Market,
+                              dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                              dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                            ),
+                          }
+                        );
+                      const subscriptionTimestamp2 = (await helpers.time.latest()) + 1;
+                      await helpers.time.setNextBlockTimestamp(subscriptionTimestamp2);
+                      await api3Market
+                        .connect(roles.randomPerson)
+                        .buySubscription(
+                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                          ethers.AbiCoder.defaultAbiCoder().encode(
+                            ['bytes32', 'bytes32[]'],
+                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                          ),
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+                          ethers.AbiCoder.defaultAbiCoder().encode(
+                            ['bytes32', 'bytes32[]'],
+                            [
+                              dapiPricingMerkleRoot,
+                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof,
+                            ]
+                          ),
+                          {
+                            value: await computeRequiredPaymentAmount(
+                              api3Market,
+                              dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
+                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
+                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+                              dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                            ),
+                          }
+                        );
+                      const paymentAmount3 = await computeRequiredPaymentAmount(
+                        api3Market,
+                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
                         dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-                    ]);
-                    expect(dapiData.dailyPrices).to.deep.equal([
-                      (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price) *
-                        BigInt(24 * 60 * 60)) /
-                        BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration),
-                      (BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price) *
-                        BigInt(24 * 60 * 60)) /
-                        BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration),
-                    ]);
+                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
+                        dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                      );
+                      const subscriptionTimestamp3 =
+                        subscriptionTimestamp1 +
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration;
+                      await helpers.time.setNextBlockTimestamp(subscriptionTimestamp3 - 60);
+                      await updateBeaconSet(
+                        api3ServerV1,
+                        'ETH/USD',
+                        airnodes,
+                        subscriptionTimestamp3 - 60,
+                        ethers.parseEther('2200')
+                      );
+                      await helpers.time.setNextBlockTimestamp(subscriptionTimestamp3);
+                      const subscriptionId = computeSubscriptionId(
+                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters
+                      );
+                      expect(
+                        await api3Market
+                          .connect(roles.randomPerson)
+                          .buySubscription.staticCall(
+                            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
+                            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                            ethers.AbiCoder.defaultAbiCoder().encode(
+                              ['bytes32', 'bytes32[]'],
+                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                            ),
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values
+                              .updateParameters,
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
+                            ethers.AbiCoder.defaultAbiCoder().encode(
+                              ['bytes32', 'bytes32[]'],
+                              [
+                                dapiPricingMerkleRoot,
+                                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.proof,
+                              ]
+                            ),
+                            { value: paymentAmount3 }
+                          )
+                      ).to.equal(subscriptionId);
+                      await expect(
+                        api3Market
+                          .connect(roles.randomPerson)
+                          .buySubscription(
+                            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
+                            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                            ethers.AbiCoder.defaultAbiCoder().encode(
+                              ['bytes32', 'bytes32[]'],
+                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                            ),
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values
+                              .updateParameters,
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
+                            ethers.AbiCoder.defaultAbiCoder().encode(
+                              ['bytes32', 'bytes32[]'],
+                              [
+                                dapiPricingMerkleRoot,
+                                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.proof,
+                              ]
+                            ),
+                            { value: paymentAmount3 }
+                          )
+                      )
+                        .to.emit(api3Market, 'UpdatedCurrentSubscriptionId')
+                        .withArgs(
+                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                          computeSubscriptionId(
+                            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters
+                          )
+                        )
+                        .to.emit(airseekerRegistry, 'UpdatedDapiNameUpdateParameters')
+                        .withArgs(
+                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters
+                        )
+                        .to.emit(api3Market, 'BoughtSubscription')
+                        .withArgs(
+                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                          subscriptionId,
+                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
+                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
+                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
+                          paymentAmount3
+                        )
+                        .to.not.emit(airseekerRegistry, 'ActivatedDapiName')
+                        .to.not.emit(api3ServerV1, 'SetDapiName');
+                      const dataFeedReading = await api3ServerV1.dataFeeds(
+                        dapiManagementMerkleLeaves.ethUsd.values.dataFeedId
+                      );
+                      const beaconReadings = await readBeacons(api3ServerV1, beaconIds);
+                      const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd.values.dapiName);
+                      expect(dapiData.dataFeedDetails).to.equal(dataFeedDetails);
+                      expect(dapiData.dapiValue).to.equal(dataFeedReading.value);
+                      expect(dapiData.dapiTimestamp).to.equal(dataFeedReading.timestamp);
+                      expect(dapiData.beaconValues).to.deep.equal(
+                        beaconReadings.map((beaconReading) => beaconReading.value)
+                      );
+                      expect(dapiData.beaconTimestamps).to.deep.equal(
+                        beaconReadings.map((beaconReading) => beaconReading.timestamp)
+                      );
+                      expect(dapiData.updateParameters).to.deep.equal([
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
+                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
+                      ]);
+                      expect(dapiData.endTimestamps).to.deep.equal([
+                        subscriptionTimestamp2 +
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
+                        subscriptionTimestamp3 +
+                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
+                      ]);
+                      expect(dapiData.dailyPrices).to.deep.equal([
+                        (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price) *
+                          BigInt(24 * 60 * 60)) /
+                          BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration),
+                        (BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price) *
+                          BigInt(24 * 60 * 60)) /
+                          BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration),
+                      ]);
+                    });
                   });
                 });
               });

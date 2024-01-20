@@ -151,9 +151,9 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
     /// @notice Buys subscription and updates the current subscription ID if
     /// necessary. The user is recommended to only interact with this contract
     /// over the API3 Market frontend due to its complexity.
-    /// @dev In the case that the subscription being purchased will become the
-    /// current one, the respective data feed must be readied before calling
-    /// this function.
+    /// @dev The data feed that the dAPI name will be set to after this
+    /// function is called must be readied (see `validateDataFeedReadiness()`)
+    /// before calling this function.
     /// Enough funds must be sent to put the sponsor wallet balance over its
     /// expected amount after the subscription is bought. Since sponsor wallets
     /// send data feed update transactions, it is not possible to estimate what
@@ -578,15 +578,6 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
             AirseekerRegistry(airseekerRegistry).setDapiNameToBeActivated(
                 dapiName
             );
-            // Let's not emit SetDapiName events for no reason
-            bytes32 currentDataFeedId = IApi3ServerV1(api3ServerV1)
-                .dapiNameHashToDataFeedId(
-                    keccak256(abi.encodePacked(dapiName))
-                );
-            if (currentDataFeedId != dataFeedId) {
-                validateDataFeedReadiness(dataFeedId);
-                IApi3ServerV1(api3ServerV1).setDapiName(dapiName, dataFeedId);
-            }
         } else {
             subscriptions[previousSubscriptionId]
                 .nextSubscriptionId = subscriptionId;
@@ -599,6 +590,14 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
             ) {
                 _updateCurrentSubscriptionId(dapiName, currentSubscriptionId);
             }
+        }
+        validateDataFeedReadiness(dataFeedId);
+        if (
+            IApi3ServerV1(api3ServerV1).dapiNameHashToDataFeedId(
+                keccak256(abi.encodePacked(dapiName))
+            ) != dataFeedId
+        ) {
+            IApi3ServerV1(api3ServerV1).setDapiName(dapiName, dataFeedId);
         }
     }
 
