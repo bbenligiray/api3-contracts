@@ -4,18 +4,20 @@ import { ethers } from 'hardhat';
 
 export async function updateBeaconSet(api3ServerV1, feedName, airnodes, timestamp, value) {
   const encodedValue = ethers.AbiCoder.defaultAbiCoder().encode(['int224'], [value]);
-  const beaconUpdateData = airnodes.map((airnode) => {
-    const templateId = deriveTemplateId(`OIS title of Airnode with address ${airnode.address}`, feedName);
-    return {
-      templateId,
-      beaconId: deriveBeaconId(airnode.address, templateId),
-      signature: airnode.signMessage(
-        ethers.toBeArray(
-          ethers.solidityPackedKeccak256(['bytes32', 'uint256', 'bytes'], [templateId, timestamp, encodedValue])
-        )
-      ),
-    };
-  });
+  const beaconUpdateData = await Promise.all(
+    airnodes.map(async (airnode) => {
+      const templateId = deriveTemplateId(`OIS title of Airnode with address ${airnode.address}`, feedName);
+      return {
+        templateId,
+        beaconId: deriveBeaconId(airnode.address, templateId),
+        signature: await airnode.signMessage(
+          ethers.toBeArray(
+            ethers.solidityPackedKeccak256(['bytes32', 'uint256', 'bytes'], [templateId, timestamp, encodedValue])
+          )
+        ),
+      };
+    })
+  );
   for (const [ind, airnode] of airnodes.entries()) {
     await api3ServerV1.updateBeaconWithSignedData(
       airnode.address,
