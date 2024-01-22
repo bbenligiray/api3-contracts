@@ -48,12 +48,12 @@ contract HashRegistry is Ownable, IHashRegistry {
         return super.owner();
     }
 
-    /// @notice Overriden to be disabled
+    /// @notice Called by the owner to renounce the ownership of the contract
     function renounceOwnership() public virtual override(Ownable, IOwnable) {
         return super.renounceOwnership();
     }
 
-    /// @notice Transfers the ownership of the contract
+    /// @notice Called by the owner to transfer the ownership of the contract
     /// @param newOwner New owner address
     function transferOwnership(
         address newOwner
@@ -140,7 +140,7 @@ contract HashRegistry is Ownable, IHashRegistry {
         emit RegisteredHash(hashType, hashValue, hashTimestamp);
     }
 
-    /// @notice Called to get the hash value for the type
+    /// @notice Returns get the hash value for the type
     /// @param hashType Hash type
     /// @return hashValue Hash value
     function getHashValue(
