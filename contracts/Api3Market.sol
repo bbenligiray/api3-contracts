@@ -12,13 +12,13 @@ import "@api3/airnode-protocol-v1/contracts/api3-server-v1/proxies/interfaces/IP
 
 /// @title The contract that API3 users interact with using the API3 Market
 /// frontend to purchase data feed subscriptions
-/// @notice API3 aims to streamline and protocolize its sales and integration
-/// processes through the API3 Market (https://market.api3.org), which is a
-/// data feed subscription marketplace. The Api3Market contract is the on-chain
-/// portion of this system.
+/// @notice API3 aims to streamline and protocolize its integration processes
+/// through the API3 Market (https://market.api3.org), which is a data feed
+/// subscription marketplace. The Api3Market contract is the on-chain portion
+/// of this system.
 /// Api3Market enables API3 to predetermine the decisions related to its data
 /// feed services (such as the curation of data feed sources or subscription
-/// prices) and publish them on-chain. This greatly streamlines the user flow,
+/// prices) and publish them on-chain. This streamlines the intergation flow,
 /// as it allows the users to initiate subscriptions immediately, without
 /// requiring any two-way communication with API3. Furthermore, this removes
 /// the need for API3 to have agents operating in the meatspace gathering order
@@ -44,10 +44,10 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
     }
 
     // The update parameters for each subscription is kept in a hash map rather
-    // than in long form as an optimization, refer to AirseekerRegistry for a
-    // similar implementation.
+    // than in full form as an optimization. Refer to AirseekerRegistry for a
+    // similar scheme.
     // The subscription queues are kept as linked lists, for which each
-    // subscription has a next subscription ID.
+    // subscription has a next subscription ID field.
     struct Subscription {
         bytes32 updateParametersHash;
         uint32 endTimestamp;
@@ -70,7 +70,7 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
 
     /// @notice dAPI management Merkle root hash type
     /// @dev "Hash type" is what HashRegistry uses to address hashes used for
-    /// different purposes, refer to it for details
+    /// different purposes
     bytes32 public constant override DAPI_MANAGEMENT_MERKLE_ROOT_HASH_TYPE =
         keccak256(abi.encodePacked("dAPI management Merkle root"));
 
@@ -113,16 +113,20 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
     // Length of abi.encode(uint256, int224, uint256)
     uint256 private constant UPDATE_PARAMETERS_LENGTH = 32 + 32 + 32;
 
-    /// @dev Deploys its own AirseekerRegistry deterministically. This implies
-    /// that Api3Market-specific Airseekers should be operated pointed at this
-    /// contract.
+    /// @dev Api3Market deploys its own AirseekerRegistry deterministically.
+    /// This implies that Api3Market-specific Airseekers should be operated by
+    /// pointing at this contract.
     /// @param owner_ Owner address
     /// @param proxyFactory_ ProxyFactory contract address
     constructor(address owner_, address proxyFactory_) HashRegistry(owner_) {
         proxyFactory = proxyFactory_;
-        api3ServerV1 = IProxyFactory(proxyFactory_).api3ServerV1();
+        address api3ServerV1_ = IProxyFactory(proxyFactory_).api3ServerV1();
+        api3ServerV1 = api3ServerV1_;
         airseekerRegistry = address(
-            new AirseekerRegistry{salt: bytes32(0)}(address(this), api3ServerV1)
+            new AirseekerRegistry{salt: bytes32(0)}(
+                address(this),
+                api3ServerV1_
+            )
         );
     }
 
@@ -150,7 +154,7 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
     }
 
     /// @notice Buys subscription and updates the current subscription ID if
-    /// necessary. The user is recommended to only interact with this contract
+    /// necessary. The user is recommended to interact with this contract only
     /// over the API3 Market frontend due to its complexity.
     /// @dev The data feed that the dAPI name will be set to after this
     /// function is called must be readied (see `validateDataFeedReadiness()`)
@@ -227,10 +231,10 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
 
     /// @notice If the current subscription has ended, updates it with the one
     /// that will end next
-    /// @dev The fact that there is a current subscription that has ended means
-    /// that API3 is providing a service that was not paid for. Therefore, API3
-    /// should poll this function for all active dAPI names and call it
-    /// whenever it is not going to revert.
+    /// @dev The fact that there is a current subscription that has ended would
+    /// mean that API3 is providing a service that was not paid for. Therefore,
+    /// API3 should poll this function for all active dAPI names and call it
+    /// whenever it is not going to revert to downgrade the specs.
     /// @param dapiName dAPI name
     function updateCurrentSubscriptionId(bytes32 dapiName) public override {
         bytes32 currentSubscriptionId = dapiNameToCurrentSubscriptionId[
@@ -248,9 +252,9 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
         _updateCurrentSubscriptionId(dapiName, currentSubscriptionId);
     }
 
-    /// @notice Updates the dAPI name to match the respective Merkle tree entry
+    /// @notice Updates the dAPI name to match the respective Merkle leaf
     /// @dev Buying a dAPI subscription always updates the dAPI name if
-    /// necessary. However, API3 may publish new Merkle roots between
+    /// necessary. However, API3 may also publish new Merkle roots between
     /// subscription purchases, in which case API3 should call this function to
     /// bring the chain state up to date. Therefore, API3 should poll this
     /// function for all active dAPI names and call it whenever it will not
@@ -297,12 +301,12 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
     }
 
     /// @notice Updates the signed API URL of the Airnode to match the
-    /// respective Merkle tree entry
-    /// @dev Unlike the dAPI management and pricing Merkle trees, the signed
-    /// API URL Merkle tree entries are not registered by the users as a part
-    /// of subscription purchase transactions. API3 should poll this function
-    /// for all Airnodes that are used in active dAPIs and call it whenever it
-    /// will not revert.
+    /// respective Merkle leaf
+    /// @dev Unlike the dAPI management and pricing Merkle leaves, the signed
+    /// API URL Merkle leaves are not registered by the users as a part of
+    /// subscription purchase transactions. API3 should poll this function for
+    /// all Airnodes that are used in active dAPIs and call it whenever it will
+    /// not revert.
     /// @param airnode Airnode address
     /// @param signedApiUrl Signed API URL
     /// @param signedApiUrlMerkleData ABI-encoded signed API URL Merkle root
@@ -333,13 +337,14 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
         );
     }
 
-    /// @notice Calls Api3ServerV1 to update Beacon with signed data
+    /// @notice Calls Api3ServerV1 to update the Beacon using data signed by
+    /// the Airnode
     /// @dev The user is intended to make a multicall transaction through the
     /// API3 Market frontend to satisfy the required conditions to be able to
     /// buy a subscription and buy the subscription in a single transaction.
     /// The functions to which external calls must be made to to satisfy said
     /// conditions (such as this one) are added to this contract so that they
-    /// can be multi-called internally.
+    /// can be multi-called by the user.
     /// @param airnode Airnode address
     /// @param templateId Template ID
     /// @param timestamp Signature timestamp
@@ -364,7 +369,8 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
             );
     }
 
-    /// @notice Calls Api3ServerV1 to update Beacon set with Beacons
+    /// @notice Calls Api3ServerV1 to update the Beacon set using the current
+    /// values of its Beacons
     /// @param beaconIds Beacon IDs
     /// @return beaconSetId Updated Beacon set ID
     function updateBeaconSetWithBeacons(
@@ -375,9 +381,8 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
     }
 
     /// @notice Calls ProxyFactory to deterministically deploy the dAPI proxy
-    /// if it has not been deployed yet
     /// @dev It is recommended for the users to read data feeds through proxies
-    /// deployed by ProxyFactory rather than calling Api3ServerV1 directly.
+    /// deployed by ProxyFactory, rather than calling Api3ServerV1 directly.
     /// Even though proxy deployment is not a condition for purchasing
     /// subscriptions, the interface is implemented here to allow the user to
     /// purchase a dAPI subscription and deploy the respective proxy in the
@@ -396,7 +401,7 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
     }
 
     /// @notice Calls ProxyFactory to deterministically deploy the dAPI proxy
-    /// with OEV if it has not been deployed yet
+    /// with OEV support
     /// @param dapiName dAPI name
     /// @param oevBeneficiary OEV beneficiary
     /// @param metadata Metadata associated with the proxy
@@ -413,7 +418,7 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
         );
     }
 
-    /// @notice Calls Airseeker to register the data feed
+    /// @notice Calls AirseekerRegistry to register the data feed
     /// @param dataFeedDetails Data feed details
     /// @return dataFeedId Data feed ID
     function registerDataFeed(
@@ -424,20 +429,20 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
         );
     }
 
-    /// @notice Returns the expected sponsor wallet balance based on the
+    /// @notice Computes the expected sponsor wallet balance based on the
     /// current subscription queue
     /// @dev API3 estimates the transaction fee cost of subscriptions, and
     /// prices them accordingly. The subscription fees paid for a dAPI are sent
     /// to the respective sponsor wallet, which will send the update
-    /// transactions. In the case that a subscription is overpriced, this
-    /// simply rolls over as a discount to the next subscription bought for the
-    /// same dAPI. In the case that a subscription is underpriced, there is
-    /// risk of the sponsor wallet running out of funds, resulting in the
-    /// subscription specs to not be met. To avoid this, API3 should poll this
-    /// function for all active dAPI names, check the respective sponsor wallet
-    /// balances and top up the sponsor wallets as necessary. This conditions
-    /// that resulted in the underpricing will most likely require an updated
-    /// dAPI pricing Merkle root to be published.
+    /// transactions. In the case that a subscription is overpriced, the extra
+    /// funds are automatically rolled over as a discount to the next
+    /// subscription bought for the same dAPI. In the case that a subscription
+    /// is underpriced, there is a risk of the sponsor wallet running out of
+    /// funds, resulting in the subscription specs to not be met. To avoid
+    /// this, API3 should poll this function for all active dAPI names, check
+    /// the respective sponsor wallet balances, and top up the sponsor wallets
+    /// as necessary. The conditions that result in the underpricing will most
+    /// likely require an updated dAPI pricing Merkle root to be published.
     /// @param dapiName dAPI name
     /// @return expectedSponsorWalletBalance Expected sponsor wallet balance
     function computeExpectedSponsorWalletBalance(
@@ -464,15 +469,19 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
         }
     }
 
-    /// @notice Returns the expected sponsor wallet balance after the
+    /// @notice Computes the expected sponsor wallet balance after the
     /// respective subscription is added to the queue
     /// @dev This function is intended to be used by the API3 Market frontend
     /// to calculate how much the user should pay to purchase a specific
-    /// subscription. As mentioned in the `buySubscription()` docstrings, the
-    /// user should aim to send slightly more than the required amount in case
-    /// the sponsor wallet sends a transaction in the meantime, whose gas cost
-    /// will decrease the sponsor wallet balance at transaction
-    /// confirmation-time.
+    /// subscription. As mentioned in the `buySubscription()` docstring, the
+    /// user should aim for the sponsor wallet balance to be slightly more than
+    /// the required amount in case it sends a transaction in the meantime,
+    /// whose gas cost may decrease the sponsor wallet balance unexpectedly.
+    /// Unit prices of the queued subscriptions are recorded on a daily basis
+    /// and the expected balance is computed from these, which introduces a
+    /// rounding error in the order of Weis. This also applies in practice (in
+    /// that one can buy a subscription whose price is 1 ETH at 0.999... ETH).
+    /// This behavior is accepted due to being trivial in effect.
     /// @param dapiName dAPI name
     /// @param updateParameters Update parameters
     /// @param duration Subscription duration
@@ -533,7 +542,7 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
         }
     }
 
-    /// @notice Gets dAPI data
+    /// @notice Gets all data about the dAPI that is available
     /// @dev This function is intended to be used by the API3 Market frontend
     /// to get all data related to a specific dAPI. It returns the entire
     /// subscription queue, including the items whose end timestamps are in the
@@ -546,7 +555,7 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
     /// @return beaconTimestamps Beacon timestamps read from Api3ServerV1
     /// @return updateParameters Update parameters of the subscriptions in the
     /// queue
-    /// @return endTimestamps End timestmap of the subscriptions in the queue
+    /// @return endTimestamps End timestamps of the subscriptions in the queue
     /// @return dailyPrices Daily prices of the subscriptions in the queue
     function getDapiData(
         bytes32 dapiName
@@ -629,13 +638,13 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
     /// @return updateParameters Update parameters
     function subscriptionIdToUpdateParameters(
         bytes32 subscriptionId
-    ) external view override returns (bytes memory updateParameters) {
+    ) public view override returns (bytes memory updateParameters) {
         updateParameters = updateParametersHashToValue[
             subscriptions[subscriptionId].updateParametersHash
         ];
     }
 
-    /// @notice Adds the subscription to the queue if possible
+    /// @notice Adds the subscription to the queue if applicable
     /// @param dapiName dAPI name
     /// @param dataFeedId Data feed ID
     /// @param updateParameters Update parameters
@@ -733,17 +742,16 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
         } else {
             AirseekerRegistry(airseekerRegistry).setDapiNameUpdateParameters(
                 dapiName,
-                updateParametersHashToValue[
-                    subscriptions[currentSubscriptionId].updateParametersHash
-                ]
+                subscriptionIdToUpdateParameters(currentSubscriptionId)
             );
         }
     }
 
-    /// @notice Prospects subscription position in queue. Iterates through the
-    /// entire subscription queue, which is implemented as linked list, and
-    /// returns the previous and next nodes of the subscription to be added.
-    /// Reverts if no suitable position can be found, which would be because
+    /// @notice Prospects the subscription position in the queue. It iterates
+    /// through the entire subscription queue, which is implemented as a linked
+    /// list, and returns the previous and next nodes of the subscription to be
+    /// added.
+    /// It reverts if no suitable position can be found, which would be because
     /// the addition of the subscription to the queue does not upgrade its
     /// specs unambiguously or addition of it results in the maximum queue
     /// length to be exceeded.
@@ -832,7 +840,7 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
         );
     }
 
-    /// @notice Compared update parameters with ones that belong to a
+    /// @notice Compares the update parameters with the ones that belong to a
     /// queued subscription
     /// @param deviationThresholdInPercentage Deviation threshold in percentage
     /// @param deviationReference Deviation reference
@@ -878,15 +886,16 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
         ) {
             return UpdateParametersComparisonResult.WorseThanQueued;
         } else {
-            // This is hit when one set of parameters have better deviation
-            // threshold and the other has better heartbeat interval
+            // This is hit when the set of parameters are superior to each
+            // other in different aspects, in which case they should not be
+            // allowed to be in the same queue
             revert("Update parameters incomparable");
         }
     }
 
-    /// @notice Validates data feed readiness. The data feed must have been
-    /// updated on Api3ServerV1 in the last `MAXIMUM_DAPI_UPDATE_AGE` and
-    /// registered on AirseekerRegistry.
+    /// @notice Validates the readiness of the data feed. The data feed must
+    /// have been updated on Api3ServerV1 in the last `MAXIMUM_DAPI_UPDATE_AGE`
+    /// and registered on AirseekerRegistry.
     /// @param dataFeedId Data feed ID
     function validateDataFeedReadiness(bytes32 dataFeedId) private view {
         (, uint32 timestamp) = IApi3ServerV1(api3ServerV1).dataFeeds(
@@ -904,6 +913,12 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
         );
     }
 
+    /// @notice Verifies the dAPI management Merkle proof
+    /// @param dapiName dAPI name
+    /// @param dataFeedId Data feed ID
+    /// @param sponsorWallet Sponsor wallet address
+    /// @param dapiManagementMerkleData ABI-encoded dAPI management Merkle root
+    /// and proof
     function verifyDapiManagementMerkleProof(
         bytes32 dapiName,
         bytes32 dataFeedId,
@@ -936,6 +951,13 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
         );
     }
 
+    /// @notice Verifies the dAPI pricing Merkle proof
+    /// @param dapiName dAPI name
+    /// @param updateParameters Update parameters
+    /// @param duration Subscription duration
+    /// @param price Subscription price
+    /// @param dapiPricingMerkleData ABI-encoded dAPI pricing Merkle root and
+    /// proof
     function verifyDapiPricingMerkleProof(
         bytes32 dapiName,
         bytes calldata updateParameters,
@@ -980,6 +1002,11 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
         );
     }
 
+    /// @notice Verifies the signed API URL Merkle proof
+    /// @param airnode Airnode address
+    /// @param signedApiUrl Signed API URL
+    /// @param signedApiUrlMerkleData ABI-encoded signed API URL Merkle root
+    /// and proof
     function verifySignedApiUrlMerkleProof(
         address airnode,
         string calldata signedApiUrl,
@@ -1006,6 +1033,10 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
         );
     }
 
+    /// @notice Derives the Beacon ID from the Airnode address and template ID
+    /// @param airnode Airnode address
+    /// @param templateId Template ID
+    /// @return beaconId Beacon ID
     function deriveBeaconId(
         address airnode,
         bytes32 templateId
