@@ -5,6 +5,7 @@ import "./HashRegistry.sol";
 import "@api3/airnode-protocol-v1/contracts/utils/ExtendedSelfMulticall.sol";
 import "./interfaces/IApi3Market.sol";
 import "./AirseekerRegistry.sol";
+import "./vendor/@openzeppelin/contracts@4.9.5/utils/math/SafeCast.sol";
 import "./vendor/@openzeppelin/contracts@4.9.5/utils/cryptography/MerkleProof.sol";
 import "@api3/airnode-protocol-v1/contracts/api3-server-v1/interfaces/IApi3ServerV1.sol";
 import "@api3/airnode-protocol-v1/contracts/api3-server-v1/proxies/interfaces/IProxyFactory.sol";
@@ -442,7 +443,7 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
     function computeExpectedSponsorWalletBalance(
         bytes32 dapiName
     ) public view override returns (uint256 expectedSponsorWalletBalance) {
-        uint32 startTimestamp = uint32(block.timestamp);
+        uint32 startTimestamp = SafeCast.toUint32(block.timestamp);
         Subscription storage queuedSubscription;
         for (
             bytes32 queuedSubscriptionId = dapiNameToCurrentSubscriptionId[
@@ -498,7 +499,7 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
                 duration
             );
         uint256 dailyPrice = (price * 1 days) / duration;
-        uint32 startTimestamp = uint32(block.timestamp);
+        uint32 startTimestamp = SafeCast.toUint32(block.timestamp);
         bytes32 queuedSubscriptionId = previousSubscriptionId == bytes32(0)
             ? subscriptionId
             : dapiNameToCurrentSubscriptionId[dapiName];
@@ -669,7 +670,7 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
         subscriptions[subscriptionId] = Subscription({
             updateParametersHash: updateParametersHash,
             endTimestamp: endTimestamp,
-            dailyPrice: uint224((price * 1 days) / duration),
+            dailyPrice: SafeCast.toUint224((price * 1 days) / duration),
             nextSubscriptionId: nextSubscriptionId
         });
         if (previousSubscriptionId == bytes32(0)) {
@@ -770,7 +771,7 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
         subscriptionId = keccak256(
             abi.encodePacked(dapiName, keccak256(updateParameters))
         );
-        endTimestamp = uint32(block.timestamp + duration);
+        endTimestamp = SafeCast.toUint32(block.timestamp + duration);
         (
             uint256 deviationThresholdInPercentage,
             int224 deviationReference,
