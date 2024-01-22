@@ -249,7 +249,7 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
                 block.timestamp,
             "Current subscription not ended"
         );
-        _updateCurrentSubscriptionId(dapiName, currentSubscriptionId);
+        updateEndedCurrentSubscriptionId(dapiName, currentSubscriptionId);
     }
 
     /// @notice Updates the dAPI name to match the respective Merkle leaf
@@ -704,7 +704,10 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
                 subscriptions[currentSubscriptionId].endTimestamp <=
                 block.timestamp
             ) {
-                _updateCurrentSubscriptionId(dapiName, currentSubscriptionId);
+                updateEndedCurrentSubscriptionId(
+                    dapiName,
+                    currentSubscriptionId
+                );
             }
         }
         validateDataFeedReadiness(dataFeedId);
@@ -721,7 +724,7 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
     /// that will end next
     /// @param dapiName dAPI name
     /// @param currentSubscriptionId Current subscription ID
-    function _updateCurrentSubscriptionId(
+    function updateEndedCurrentSubscriptionId(
         bytes32 dapiName,
         bytes32 currentSubscriptionId
     ) private {
