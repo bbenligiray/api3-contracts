@@ -7,13 +7,13 @@ import "./interfaces/IAirseekerRegistry.sol";
 import "./vendor/@openzeppelin/contracts@4.9.5/utils/structs/EnumerableSet.sol";
 import "@api3/airnode-protocol-v1/contracts/api3-server-v1/interfaces/IApi3ServerV1.sol";
 
-/// @title A contract that is used by its owner to register the data required
-/// by an Airseeker to uphold the respective data feed specs
+/// @title A contract where active data feeds and their specs are registered by
+/// the contract owner for the Airseeker that serves them to refer to
 /// @notice Airseeker is an application that pushes API provider-signed data to
 /// chain when certain conditions are met so that the data feeds served on the
 /// Api3ServerV1 contract are updated according to the respective specs. In
-/// other words, this contract can be thought of as an on-chain configuration
-/// file for an Airseeker (or multiple Airseekers in a setup with redundancy).
+/// other words, this contract is an on-chain configuration file for an
+/// Airseeker (or multiple Airseekers in a setup with redundancy).
 /// The Airseeker must know which data feeds are active (and thus need to be
 /// updated), the constituting Airnode (the oracle node that API providers
 /// operate to sign data) addresses and request template IDs, what the
@@ -23,7 +23,7 @@ import "@api3/airnode-protocol-v1/contracts/api3-server-v1/interfaces/IApi3Serve
 /// The contract owner is responsible with leaving the state of this contract
 /// in a way that Airseeker expects. For example, if a dAPI name is activated
 /// without registering the respective data feed, the Airseeker will not have
-/// the data it needs to execute updates.
+/// access to the data that it needs to execute updates.
 contract AirseekerRegistry is
     Ownable,
     ExtendedSelfMulticall,
@@ -31,17 +31,17 @@ contract AirseekerRegistry is
 {
     using EnumerableSet for EnumerableSet.Bytes32Set;
 
-    /// @notice Maximum number of Beacons that a Beacon set whose details are
-    /// being registered can consist of
+    /// @notice Maximum number of Beacons in a Beacon set that can be
+    /// registered
     /// @dev Api3ServerV1 introduces the concept of a Beacon, which is a
     /// single-source data feed. Api3ServerV1 allows Beacons to be read
     /// individually, or arbitrary combinations of them to be aggregated
     /// on-chain to form multiple-source data feeds, which are called Beacon
     /// sets. This contract does not support Beacon sets that consist of more
-    /// than `MAXIMUM_BEACON_COUNT_IN_SET` Beacons.
+    /// than `MAXIMUM_BEACON_COUNT_IN_SET` Beacons to be registered.
     uint256 public constant override MAXIMUM_BEACON_COUNT_IN_SET = 21;
 
-    /// @notice Maximum length of the encoded update parameters
+    /// @notice Maximum encoded update parameters length
     uint256 public constant override MAXIMUM_UPDATE_PARAMETERS_LENGTH = 1024;
 
     /// @notice Maximum signed API URL length
@@ -56,8 +56,6 @@ contract AirseekerRegistry is
     mapping(address => string) public override airnodeToSignedApiUrl;
 
     /// @notice Data feed ID to encoded details
-    /// @dev See the `registerDataFeed()` implementation for the encoding
-    /// scheme
     mapping(bytes32 => bytes) public override dataFeedIdToDetails;
 
     // Api3ServerV1 uses Beacon IDs (see the `deriveBeaconId()` implementation)
@@ -141,14 +139,14 @@ contract AirseekerRegistry is
     }
 
     /// @notice Overriden to be disabled
-    function renounceOwnership() public pure override(IOwnable, Ownable) {
+    function renounceOwnership() public pure override(Ownable, IOwnable) {
         revert("Ownership cannot be renounced");
     }
 
     /// @notice Overriden to be disabled
     function transferOwnership(
         address
-    ) public pure override(IOwnable, Ownable) {
+    ) public pure override(Ownable, IOwnable) {
         revert("Ownership cannot be transferred");
     }
 
@@ -213,8 +211,8 @@ contract AirseekerRegistry is
         ) {
             dataFeedIdToUpdateParametersHash[dataFeedId] = updateParametersHash;
             if (
-                keccak256(updateParametersHashToValue[updateParametersHash]) !=
-                updateParametersHash
+                updateParametersHashToValue[updateParametersHash].length !=
+                updateParameters.length
             ) {
                 updateParametersHashToValue[
                     updateParametersHash
@@ -246,8 +244,8 @@ contract AirseekerRegistry is
         if (dapiNameToUpdateParametersHash[dapiName] != updateParametersHash) {
             dapiNameToUpdateParametersHash[dapiName] = updateParametersHash;
             if (
-                keccak256(updateParametersHashToValue[updateParametersHash]) !=
-                updateParametersHash
+                updateParametersHashToValue[updateParametersHash].length !=
+                updateParameters.length
             ) {
                 updateParametersHashToValue[
                     updateParametersHash
@@ -306,17 +304,16 @@ contract AirseekerRegistry is
             dataFeedDetailsLength >=
             DATA_FEED_DETAILS_LENGTH_FOR_BEACON_SET_WITH_TWO_BEACONS
         ) {
-            // dataFeedId maps to a Beacon set with at least two Beacons.
             require(
                 dataFeedDetailsLength <= MAXIMUM_DATA_FEED_DETAILS_LENGTH,
-                "Feed details data too long"
+                "Data feed details too long"
             );
             (address[] memory airnodes, bytes32[] memory templateIds) = abi
                 .decode(dataFeedDetails, (address[], bytes32[]));
             require(
                 abi.encode(airnodes, templateIds).length ==
                     dataFeedDetailsLength,
-                "Feed details data trail"
+                "Data feed details trail"
             );
             uint256 beaconCount = airnodes.length;
             require(
@@ -333,12 +330,9 @@ contract AirseekerRegistry is
             }
             dataFeedId = deriveBeaconSetId(beaconIds);
         } else {
-            revert("Details data too short");
+            revert("Data feed details too short");
         }
-        if (
-            keccak256(dataFeedIdToDetails[dataFeedId]) !=
-            keccak256(dataFeedDetails)
-        ) {
+        if (dataFeedIdToDetails[dataFeedId].length != dataFeedDetailsLength) {
             dataFeedIdToDetails[dataFeedId] = dataFeedDetails;
             emit RegisteredDataFeed(dataFeedId, dataFeedDetails);
         }
@@ -346,9 +340,9 @@ contract AirseekerRegistry is
 
     /// @notice In an imaginary array consisting of the the active data feed
     /// IDs and active dAPI names, picks the index-th identifier, and returns
-    /// all data that is available the respective data feed. Whenever data is
-    /// not available (including the case where index does not correspond to an
-    /// active data feed), returns empty values.
+    /// all data about the respective data feed that is available. Whenever
+    /// data is not available (including the case where index does not
+    /// correspond to an active data feed), returns empty values.
     /// @dev Airseeker uses this function to get all the data it needs about an
     /// active data feed with a single RPC call
     /// @param index Index
@@ -483,10 +477,10 @@ contract AirseekerRegistry is
         return dataFeedIdToDetails[dataFeedId].length != 0;
     }
 
-    /// @notice Derives the Beacon ID of an Airnode address and template ID
-    /// pair
+    /// @notice Derives the Beacon ID from the Airnode address and template ID
     /// @param airnode Airnode address
     /// @param templateId Template ID
+    /// @return beaconId Beacon ID
     function deriveBeaconId(
         address airnode,
         bytes32 templateId
@@ -494,7 +488,7 @@ contract AirseekerRegistry is
         beaconId = keccak256(abi.encodePacked(airnode, templateId));
     }
 
-    /// @notice Derives the Beacon set ID of a Beacon IDs array
+    /// @notice Derives the Beacon set ID from the Beacon IDs
     /// @param beaconIds Beacon IDs
     /// @return beaconSetId Beacon set ID
     function deriveBeaconSetId(

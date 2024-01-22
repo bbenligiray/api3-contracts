@@ -802,7 +802,7 @@ describe('AirseekerRegistry', function () {
               });
             });
           });
-          context('Data feed details data trails', function () {
+          context('Data feed details data trail', function () {
             it('reverts', async function () {
               const { roles, airnodes, airseekerRegistry } = await helpers.loadFixture(deploy);
               const beacons = airnodes
@@ -821,7 +821,7 @@ describe('AirseekerRegistry', function () {
               )}00`;
               await expect(
                 airseekerRegistry.connect(roles.randomPerson).registerDataFeed(dataFeedDetailsWithTrailingData)
-              ).to.be.revertedWith('Feed details data trail');
+              ).to.be.revertedWith('Data feed details trail');
             });
           });
         }
@@ -840,7 +840,7 @@ describe('AirseekerRegistry', function () {
             );
             await expect(
               airseekerRegistry.connect(roles.randomPerson).registerDataFeed(dataFeedDetailsExceedingMaximumLength)
-            ).to.be.revertedWith('Feed details data too long');
+            ).to.be.revertedWith('Data feed details too long');
           });
         }
       );
@@ -851,7 +851,7 @@ describe('AirseekerRegistry', function () {
         it('reverts', async function () {
           const { roles, airnodes, airseekerRegistry } = await helpers.loadFixture(deploy);
           await expect(airseekerRegistry.connect(roles.randomPerson).registerDataFeed('0x')).to.be.revertedWith(
-            'Details data too short'
+            'Data feed details too short'
           );
           const templateId = deriveTemplateId(`OIS title of Airnode with address ${airnodes[0].address}`, 'ETH/USD');
           const dataFeedDetails = ethers.AbiCoder.defaultAbiCoder().encode(
@@ -860,7 +860,7 @@ describe('AirseekerRegistry', function () {
           );
           await expect(
             airseekerRegistry.connect(roles.randomPerson).registerDataFeed(`${dataFeedDetails}00`)
-          ).to.be.revertedWith('Details data too short');
+          ).to.be.revertedWith('Data feed details too short');
         });
       }
     );
