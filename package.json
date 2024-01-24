@@ -12,7 +12,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "pnpm build:contracts && tsc",
+    "build": "pnpm build:contracts && tsc -p tsconfig.build.json",
     "build:contracts": "hardhat compile",
     "lint": "pnpm run prettier:check && pnpm run lint:eslint && pnpm run lint:solhint",
     "lint:solhint": "solhint ./contracts/**/*.sol",

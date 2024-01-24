@@ -1,7 +1,7 @@
 module.exports = {
   extends: ['./node_modules/@api3/commons/dist/eslint/universal'],
   parserOptions: {
-    project: ['./tsconfig.eslint.json'],
+    project: ['./tsconfig.json'],
   },
   rules: {
     'unicorn/filename-case': 'off',
