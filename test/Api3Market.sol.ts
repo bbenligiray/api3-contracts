@@ -3578,7 +3578,7 @@ describe('Api3Market', function () {
       const { roles, airnodes, api3ServerV1, templateIds, beaconIds, api3Market } = await helpers.loadFixture(deploy);
       const timestamp = await helpers.time.latest();
       const encodedValue = ethers.AbiCoder.defaultAbiCoder().encode(['int224'], [123]);
-      const signature = airnodes[0].signMessage(
+      const signature = await airnodes[0].signMessage(
         ethers.toBeArray(
           ethers.solidityPackedKeccak256(['bytes32', 'uint256', 'bytes'], [templateIds[0], timestamp, encodedValue])
         )
