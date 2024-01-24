@@ -644,6 +644,19 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
         ];
     }
 
+    /// @notice Returns the signature delegation hash type used in delegation
+    /// signatures
+    /// @return Signature delegation hash type
+    function signatureDelegationHashType()
+        public
+        view
+        virtual
+        override(HashRegistry, IHashRegistry)
+        returns (bytes32)
+    {
+        return keccak256(abi.encodePacked("Api3Market signature delegation"));
+    }
+
     /// @notice Adds the subscription to the queue if applicable
     /// @param dapiName dAPI name
     /// @param dataFeedId Data feed ID

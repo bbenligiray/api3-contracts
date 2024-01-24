@@ -29,6 +29,8 @@ interface IHashRegistry is IOwnable {
         bytes[] calldata signatures
     ) external;
 
+    function signatureDelegationHashType() external view returns (bytes32);
+
     function getHashValue(
         bytes32 hashType
     ) external view returns (bytes32 hashValue);

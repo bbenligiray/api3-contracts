@@ -15,9 +15,19 @@ import "./vendor/@openzeppelin/contracts@4.9.5/utils/cryptography/ECDSA.sol";
 /// with timestamps that act as nonces, meaning that each registration must
 /// be with a larger timestamp than the previous. The contract owner can
 /// override previously registered hashes.
+/// A signer can sign a delegation message that allows the delegate to sign
+/// hashes on their behalf across all instances of this contract until the
+/// specified time. This delegation is irrevocable by design (as revoking across
+/// all instances would be error-prone). To undo an unwanted delegation, the
+/// signer must be swapped out by the contract owner until the delegation runs
+/// out.
 /// @dev This contract can be used in standalone form to be referred to through
 /// external calls, or inherited by the contract that will access the
-/// registered hashes internally
+/// registered hashes internally.
+/// HashRegistry is intended for use-cases where signatures and delegations
+/// need to apply universally across domains, which is why it is blind to the
+/// domain (unlike ERC-712). However, the inheriting contract can implement the
+/// type hashes to be domain-specific.
 contract HashRegistry is Ownable, IHashRegistry {
     struct Hash {
         bytes32 value;
@@ -102,6 +112,9 @@ contract HashRegistry is Ownable, IHashRegistry {
     /// The signers must have been set for the hash type, and the signatures
     /// must be sorted for the respective signer addresses to be in ascending
     /// order.
+    /// Each signature can either be a standalone signature by the respective
+    /// signer, or a signature by the signer's delegate, encoded along with
+    /// the delegation end timestamp and delegation signature.
     /// @param hashType Hash type
     /// @param hashValue Hash value
     /// @param hashTimestamp Hash timestamp
@@ -122,15 +135,41 @@ contract HashRegistry is Ownable, IHashRegistry {
         require(signersHash != bytes32(0), "Signers not set");
         uint256 signaturesCount = signatures.length;
         address[] memory signers = new address[](signaturesCount);
+        bytes32 ethSignedMessageHash = ECDSA.toEthSignedMessageHash(
+            keccak256(abi.encodePacked(hashType, hashValue, hashTimestamp))
+        );
         for (uint256 ind = 0; ind < signaturesCount; ind++) {
-            signers[ind] = ECDSA.recover(
-                ECDSA.toEthSignedMessageHash(
-                    keccak256(
-                        abi.encodePacked(hashType, hashValue, hashTimestamp)
-                    )
-                ),
-                signatures[ind]
-            );
+            if (signatures[ind].length == 65) {
+                signers[ind] = ECDSA.recover(
+                    ethSignedMessageHash,
+                    signatures[ind]
+                );
+            } else {
+                (
+                    uint256 delegationEndTimestamp,
+                    bytes memory delegationSignature,
+                    bytes memory hashSignature
+                ) = abi.decode(signatures[ind], (uint256, bytes, bytes));
+                require(
+                    block.timestamp > delegationEndTimestamp,
+                    "Delegation ended"
+                );
+                signers[ind] = ECDSA.recover(
+                    ECDSA.toEthSignedMessageHash(
+                        keccak256(
+                            abi.encodePacked(
+                                signatureDelegationHashType(),
+                                ECDSA.recover(
+                                    ethSignedMessageHash,
+                                    hashSignature
+                                ),
+                                delegationEndTimestamp
+                            )
+                        )
+                    ),
+                    delegationSignature
+                );
+            }
         }
         require(
             signersHash == keccak256(abi.encodePacked(signers)),
@@ -138,6 +177,19 @@ contract HashRegistry is Ownable, IHashRegistry {
         );
         hashes[hashType] = Hash({value: hashValue, timestamp: hashTimestamp});
         emit RegisteredHash(hashType, hashValue, hashTimestamp);
+    }
+
+    /// @notice Returns the signature delegation hash type used in delegation
+    /// signatures
+    /// @return Signature delegation hash type
+    function signatureDelegationHashType()
+        public
+        view
+        virtual
+        override
+        returns (bytes32)
+    {
+        return keccak256(abi.encodePacked("HashRegistry signature delegation"));
     }
 
     /// @notice Returns get the hash value for the type
