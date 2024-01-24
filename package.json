@@ -2,7 +2,7 @@
   "name": "@bbenligiray/api3-contracts",
   "description": "Contracts through which API3 services are delivered",
   "license": "MIT",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "engines": {
     "node": "^20.11.0"
   },
