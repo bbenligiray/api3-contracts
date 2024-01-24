@@ -17,6 +17,10 @@ describe('Api3Market', function () {
     ['string'],
     ['Signed API URL Merkle root']
   );
+  const SIGNATURE_DELEGATION_HASH_TYPE = ethers.solidityPackedKeccak256(
+    ['string'],
+    ['Api3Market signature delegation']
+  );
   const MAXIMUM_DAPI_UPDATE_AGE = 24 * 60 * 60;
 
   async function computeRequiredPaymentAmount(
@@ -442,6 +446,7 @@ describe('Api3Market', function () {
         expect(await api3Market.DAPI_PRICING_MERKLE_ROOT_HASH_TYPE()).to.equal(DAPI_PRICING_MERKLE_ROOT_HASH_TYPE);
         expect(await api3Market.SIGNED_API_URL_MERKLE_ROOT_HASH_TYPE()).to.equal(SIGNED_API_URL_MERKLE_ROOT_HASH_TYPE);
         expect(await api3Market.MAXIMUM_DAPI_UPDATE_AGE()).to.equal(MAXIMUM_DAPI_UPDATE_AGE);
+        expect(await api3Market.signatureDelegationHashType()).to.equal(SIGNATURE_DELEGATION_HASH_TYPE);
         expect(await api3Market.owner()).to.equal(roles.owner.address);
         expect(await api3Market.proxyFactory()).to.equal(await proxyFactory.getAddress());
         expect(await api3Market.api3ServerV1()).to.equal(await api3ServerV1.getAddress());

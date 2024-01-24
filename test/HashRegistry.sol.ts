@@ -13,6 +13,11 @@ export async function signHash(signers, hashType, hash, timestamp) {
 }
 
 describe('HashRegistry', function () {
+  const SIGNATURE_DELEGATION_HASH_TYPE = ethers.solidityPackedKeccak256(
+    ['string'],
+    ['HashRegistry signature delegation']
+  );
+
   async function deploy() {
     const hashTypeA = ethers.solidityPackedKeccak256(['string'], ['Hash type A']);
     const hashTypeB = ethers.solidityPackedKeccak256(['string'], ['Hash type B']);
@@ -67,15 +72,16 @@ describe('HashRegistry', function () {
   describe('constructor', function () {
     context('Owner address is not zero', function () {
       it('constructs', async function () {
+        const { roles, hashRegistry } = await helpers.loadFixture(deploy);
+        expect(await hashRegistry.owner()).to.equal(roles.owner.address);
+        expect(await hashRegistry.signatureDelegationHashType()).to.equal(SIGNATURE_DELEGATION_HASH_TYPE);
+      });
+    });
+    context('Owner address is zero', function () {
+      it('reverts', async function () {
         const { roles } = await helpers.loadFixture(deploy);
         const HashRegistry = await ethers.getContractFactory('HashRegistry', roles.deployer);
         await expect(HashRegistry.deploy(ethers.ZeroAddress)).to.be.revertedWith('Owner address zero');
-      });
-    });
-    context('Owner address is not zero', function () {
-      it('reverts', async function () {
-        const { roles, hashRegistry } = await helpers.loadFixture(deploy);
-        expect(await hashRegistry.owner()).to.equal(roles.owner.address);
       });
     });
   });
