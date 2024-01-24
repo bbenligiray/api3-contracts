@@ -1,5 +1,5 @@
 {
-  "name": "@bbenligiray/api3-contracts",
+  "name": "api3-contracts",
   "description": "Contracts through which API3 services are delivered",
   "license": "MIT",
   "version": "0.0.1",
