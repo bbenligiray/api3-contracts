@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "noEmit": true,
     "lib": ["esnext"],
     "module": "Node16",
     "esModuleInterop": true,
