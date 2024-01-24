@@ -2,10 +2,12 @@ import * as helpers from '@nomicfoundation/hardhat-network-helpers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
 
-export function signHash(signers, hashType, hash, timestamp) {
-  return signers.map((signer) =>
-    signer.signMessage(
-      ethers.toBeArray(ethers.solidityPackedKeccak256(['bytes32', 'bytes32', 'uint256'], [hashType, hash, timestamp]))
+export async function signHash(signers, hashType, hash, timestamp) {
+  return Promise.all(
+    signers.map((signer) =>
+      signer.signMessage(
+        ethers.toBeArray(ethers.solidityPackedKeccak256(['bytes32', 'bytes32', 'uint256'], [hashType, hash, timestamp]))
+      )
     )
   );
 }

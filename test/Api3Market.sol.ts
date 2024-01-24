@@ -224,13 +224,11 @@ describe('Api3Market', function () {
       DAPI_MANAGEMENT_MERKLE_ROOT_HASH_TYPE,
       dapiManagementMerkleTree.root,
       hashTimestamp,
-      await Promise.all(
-        signHash(
-          sortedDapiManagementMerkleRootSigners,
-          DAPI_MANAGEMENT_MERKLE_ROOT_HASH_TYPE,
-          dapiManagementMerkleTree.root,
-          hashTimestamp
-        )
+      await signHash(
+        sortedDapiManagementMerkleRootSigners,
+        DAPI_MANAGEMENT_MERKLE_ROOT_HASH_TYPE,
+        dapiManagementMerkleTree.root,
+        hashTimestamp
       )
     );
 
@@ -356,13 +354,11 @@ describe('Api3Market', function () {
       DAPI_PRICING_MERKLE_ROOT_HASH_TYPE,
       dapiPricingMerkleTree.root,
       hashTimestamp,
-      await Promise.all(
-        signHash(
-          sortedDapiPricingMerkleRootSigners,
-          DAPI_PRICING_MERKLE_ROOT_HASH_TYPE,
-          dapiPricingMerkleTree.root,
-          hashTimestamp
-        )
+      await signHash(
+        sortedDapiPricingMerkleRootSigners,
+        DAPI_PRICING_MERKLE_ROOT_HASH_TYPE,
+        dapiPricingMerkleTree.root,
+        hashTimestamp
       )
     );
 
@@ -404,13 +400,11 @@ describe('Api3Market', function () {
       SIGNED_API_URL_MERKLE_ROOT_HASH_TYPE,
       signedApiUrlMerkleTree.root,
       hashTimestamp,
-      await Promise.all(
-        signHash(
-          sortedSignedApiUrlMerkleRootSigners,
-          SIGNED_API_URL_MERKLE_ROOT_HASH_TYPE,
-          signedApiUrlMerkleTree.root,
-          hashTimestamp
-        )
+      await signHash(
+        sortedSignedApiUrlMerkleRootSigners,
+        SIGNED_API_URL_MERKLE_ROOT_HASH_TYPE,
+        signedApiUrlMerkleTree.root,
+        hashTimestamp
       )
     );
 
