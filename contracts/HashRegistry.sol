@@ -181,6 +181,11 @@ contract HashRegistry is Ownable, IHashRegistry {
 
     /// @notice Returns the signature delegation hash type used in delegation
     /// signatures
+    /// @dev Delegation signatures signed with a signature delegation hash type
+    /// will apply universally across all HashRegistry instances that use that
+    /// same signature delegation hash type. The inheriting contract can
+    /// specify a special signature delegation hash type by overriding this
+    /// function.
     /// @return Signature delegation hash type
     function signatureDelegationHashType()
         public
