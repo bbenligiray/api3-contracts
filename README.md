@@ -1,5 +1,9 @@
 # api3-contracts
 
+> Contracts through which API3 services are delivered
+
+## Instructions
+
 Install the dependencies and build
 
 ```sh
@@ -33,6 +37,7 @@ Strings.sol is identical!
 ECDSA.sol is identical!
 MerkleProof.sol is identical!
 Math.sol is identical!
+SafeCast.sol is identical!
 SignedMath.sol is identical!
 EnumerableSet.sol is identical!
 ```
