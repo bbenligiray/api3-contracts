@@ -12,7 +12,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "hardhat compile",
+    "build": "pnpm build:contracts && tsc",
+    "build:contracts": "hardhat compile",
     "lint": "pnpm run prettier:check && pnpm run lint:eslint && pnpm run lint:solhint",
     "lint:solhint": "solhint ./contracts/**/*.sol",
     "lint:eslint": "eslint . --ext .js,.ts",
