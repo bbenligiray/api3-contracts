@@ -90,12 +90,13 @@ contract AirseekerRegistry is
     // Length of abi.encode(address[2], bytes32[2])
     uint256
         private constant DATA_FEED_DETAILS_LENGTH_FOR_BEACON_SET_WITH_TWO_BEACONS =
-        (2 * 32) + (32 + 2 * 32) + (32 + 2 * 32);
+        32 + 32 + (32 + 2 * 32) + (32 + 2 * 32);
 
     // Length of
     // abi.encode(address[MAXIMUM_BEACON_COUNT_IN_SET], bytes32[MAXIMUM_BEACON_COUNT_IN_SET])
     uint256 private constant MAXIMUM_DATA_FEED_DETAILS_LENGTH =
-        (2 * 32) +
+        32 +
+            32 +
             (32 + MAXIMUM_BEACON_COUNT_IN_SET * 32) +
             (32 + MAXIMUM_BEACON_COUNT_IN_SET * 32);
 

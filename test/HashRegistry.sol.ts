@@ -294,7 +294,7 @@ describe('HashRegistry', function () {
               });
             });
             context('Delegation signatures are used', function () {
-              context('All delegation signatures can be decoded', function () {
+              context('All signatures have a valid length', function () {
                 context('None of the delegation signatures have expired', function () {
                   context('All delegate hash signatures are valid', function () {
                     context('All delegation signatures are valid', function () {
@@ -439,7 +439,7 @@ describe('HashRegistry', function () {
                   });
                 });
               });
-              context('Not all delegation signatures can be decoded', function () {
+              context('Not all signatures have a valid length', function () {
                 it('reverts', async function () {
                   const { hashTypeA, roles, sortedHashTypeASigners, delegates, hashRegistry } =
                     await helpers.loadFixture(deployAndSetSigners);
@@ -464,7 +464,7 @@ describe('HashRegistry', function () {
                         signatures[1]!,
                         '0x',
                       ])
-                  ).to.be.revertedWithoutReason();
+                  ).to.be.revertedWith('Invalid signature length');
                 });
               });
             });

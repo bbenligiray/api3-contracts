@@ -40,6 +40,14 @@ contract HashRegistry is Ownable, IHashRegistry {
     /// @notice Hash type to the hash of the array of signer addresses
     mapping(bytes32 => bytes32) public override hashTypeToSignersHash;
 
+    uint256 private constant ECDSA_SIGNATURE_LENGTH = 65;
+
+    // Length of abi.encode(uint256, bytes, bytes), where the bytes types are
+    // ECDSA signatures padded to the next largest multiple of 32 bytes, which
+    // is 96
+    uint256 private constant DELEGATED_SIGNATURE_LENGTH =
+        32 + 32 + 32 + (32 + 96) + (32 + 96);
+
     /// @param owner_ Owner address
     constructor(address owner_) {
         require(owner_ != address(0), "Owner address zero");
@@ -139,12 +147,13 @@ contract HashRegistry is Ownable, IHashRegistry {
             keccak256(abi.encodePacked(hashType, hashValue, hashTimestamp))
         );
         for (uint256 ind = 0; ind < signaturesCount; ind++) {
-            if (signatures[ind].length == 65) {
+            uint256 signatureLength = signatures[ind].length;
+            if (signatureLength == ECDSA_SIGNATURE_LENGTH) {
                 signers[ind] = ECDSA.recover(
                     ethSignedMessageHash,
                     signatures[ind]
                 );
-            } else {
+            } else if (signatureLength == DELEGATED_SIGNATURE_LENGTH) {
                 (
                     uint256 delegationEndTimestamp,
                     bytes memory delegationSignature,
@@ -169,6 +178,8 @@ contract HashRegistry is Ownable, IHashRegistry {
                     ),
                     delegationSignature
                 );
+            } else {
+                revert("Invalid signature length");
             }
         }
         require(
