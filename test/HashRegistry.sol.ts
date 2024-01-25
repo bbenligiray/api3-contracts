@@ -4,7 +4,12 @@ import { expect } from 'chai';
 import type { BytesLike, HDNodeWallet } from 'ethers';
 import { ethers } from 'hardhat';
 
-export async function signHash(signers: HDNodeWallet[], hashType: BytesLike, hash: BytesLike, timestamp: number) {
+export async function signHash(
+  signers: HDNodeWallet[],
+  hashType: BytesLike,
+  hash: BytesLike,
+  timestamp: number
+): Promise<BytesLike[]> {
   return Promise.all(
     signers.map(async (signer) =>
       signer.signMessage(
@@ -19,6 +24,25 @@ describe('HashRegistry', function () {
     ['string'],
     ['HashRegistry signature delegation']
   );
+
+  async function signDelegation(
+    signers: HDNodeWallet[],
+    delegates: HDNodeWallet[],
+    endTimestamp: number
+  ): Promise<BytesLike[]> {
+    return Promise.all(
+      signers.map(async (signer, index) =>
+        signer.signMessage(
+          ethers.toBeArray(
+            ethers.solidityPackedKeccak256(
+              ['bytes32', 'address', 'uint256'],
+              [SIGNATURE_DELEGATION_HASH_TYPE, delegates[index]!.address, endTimestamp]
+            )
+          )
+        )
+      )
+    );
+  }
 
   async function deploy() {
     const hashTypeA = ethers.solidityPackedKeccak256(['string'], ['Hash type A']);
@@ -35,6 +59,7 @@ describe('HashRegistry', function () {
     const sortedHashTypeBSigners = Array.from({ length: 2 })
       .map(() => ethers.Wallet.createRandom())
       .sort((a, b) => (BigInt(a.address) > BigInt(b.address) ? 1 : -1));
+    const delegates = Array.from({ length: sortedHashTypeASigners.length }).map(() => ethers.Wallet.createRandom());
 
     const HashRegistry = await ethers.getContractFactory('HashRegistry', roles.deployer);
     const hashRegistry = await HashRegistry.deploy(roles.owner!.address);
@@ -45,30 +70,23 @@ describe('HashRegistry', function () {
       roles,
       sortedHashTypeASigners,
       sortedHashTypeBSigners,
+      delegates,
       hashRegistry,
     };
   }
 
   async function deployAndSetSigners() {
-    const { hashTypeA, hashTypeB, roles, sortedHashTypeASigners, sortedHashTypeBSigners, hashRegistry } =
-      await deploy();
+    const deployment = await deploy();
 
-    await hashRegistry.connect(roles.owner).setSigners(
-      hashTypeA,
-      sortedHashTypeASigners.map((signer) => signer.address)
+    await deployment.hashRegistry.connect(deployment.roles.owner).setSigners(
+      deployment.hashTypeA,
+      deployment.sortedHashTypeASigners.map((signer) => signer.address)
     );
-    await hashRegistry.connect(roles.owner).setSigners(
-      hashTypeB,
-      sortedHashTypeBSigners.map((signer) => signer.address)
+    await deployment.hashRegistry.connect(deployment.roles.owner).setSigners(
+      deployment.hashTypeB,
+      deployment.sortedHashTypeBSigners.map((signer) => signer.address)
     );
-    return {
-      hashTypeA,
-      hashTypeB,
-      roles,
-      sortedHashTypeASigners,
-      sortedHashTypeBSigners,
-      hashRegistry,
-    };
+    return deployment;
   }
 
   describe('constructor', function () {
@@ -238,39 +256,216 @@ describe('HashRegistry', function () {
       context('Timestamp is not from the future', function () {
         context('Timestamp is more recent than the previous one', function () {
           context('Signers are set for the hash type', function () {
-            context('All signatures match', function () {
-              it('registers hash', async function () {
-                const { hashTypeA, roles, sortedHashTypeASigners, hashRegistry } =
-                  await helpers.loadFixture(deployAndSetSigners);
-                const hash = ethers.hexlify(ethers.randomBytes(32));
-                const timestamp = await helpers.time.latest();
-                const signatures = await signHash(sortedHashTypeASigners, hashTypeA, hash, timestamp);
-                const hashBefore = await hashRegistry.hashes(hashTypeA);
-                expect(hashBefore.value).to.equal(ethers.ZeroHash);
-                expect(hashBefore.timestamp).to.equal(0);
-                expect(await hashRegistry.getHashValue(hashTypeA)).to.equal(ethers.ZeroHash);
-                await expect(
-                  hashRegistry.connect(roles.randomPerson).registerHash(hashTypeA, hash, timestamp, signatures)
-                )
-                  .to.emit(hashRegistry, 'RegisteredHash')
-                  .withArgs(hashTypeA, hash, timestamp);
-                const hashAfter = await hashRegistry.hashes(hashTypeA);
-                expect(hashAfter.value).to.equal(hash);
-                expect(hashAfter.timestamp).to.equal(timestamp);
-                expect(await hashRegistry.getHashValue(hashTypeA)).to.equal(hash);
+            context('No delegation signature is used', function () {
+              context('All signatures match', function () {
+                it('registers hash', async function () {
+                  const { hashTypeA, roles, sortedHashTypeASigners, hashRegistry } =
+                    await helpers.loadFixture(deployAndSetSigners);
+                  const hash = ethers.hexlify(ethers.randomBytes(32));
+                  const timestamp = await helpers.time.latest();
+                  const signatures = await signHash(sortedHashTypeASigners, hashTypeA, hash, timestamp);
+                  const hashBefore = await hashRegistry.hashes(hashTypeA);
+                  expect(hashBefore.value).to.equal(ethers.ZeroHash);
+                  expect(hashBefore.timestamp).to.equal(0);
+                  expect(await hashRegistry.getHashValue(hashTypeA)).to.equal(ethers.ZeroHash);
+                  await expect(
+                    hashRegistry.connect(roles.randomPerson).registerHash(hashTypeA, hash, timestamp, signatures)
+                  )
+                    .to.emit(hashRegistry, 'RegisteredHash')
+                    .withArgs(hashTypeA, hash, timestamp);
+                  const hashAfter = await hashRegistry.hashes(hashTypeA);
+                  expect(hashAfter.value).to.equal(hash);
+                  expect(hashAfter.timestamp).to.equal(timestamp);
+                  expect(await hashRegistry.getHashValue(hashTypeA)).to.equal(hash);
+                });
+              });
+              context('Not all signatures match', function () {
+                it('reverts', async function () {
+                  const { hashTypeA, roles, sortedHashTypeBSigners, hashRegistry } =
+                    await helpers.loadFixture(deployAndSetSigners);
+                  const hash = ethers.hexlify(ethers.randomBytes(32));
+                  const timestamp = await helpers.time.latest();
+                  // Sign with the wrong signers
+                  const signatures = await signHash(sortedHashTypeBSigners, hashTypeA, hash, timestamp);
+                  await expect(
+                    hashRegistry.connect(roles.randomPerson).registerHash(hashTypeA, hash, timestamp, signatures)
+                  ).to.be.revertedWith('Signature mismatch');
+                });
               });
             });
-            context('Not all signatures match', function () {
-              it('reverts', async function () {
-                const { hashTypeA, roles, sortedHashTypeBSigners, hashRegistry } =
-                  await helpers.loadFixture(deployAndSetSigners);
-                const hash = ethers.hexlify(ethers.randomBytes(32));
-                const timestamp = await helpers.time.latest();
-                // Sign with the wrong signers
-                const signatures = await signHash(sortedHashTypeBSigners, hashTypeA, hash, timestamp);
-                await expect(
-                  hashRegistry.connect(roles.randomPerson).registerHash(hashTypeA, hash, timestamp, signatures)
-                ).to.be.revertedWith('Signature mismatch');
+            context('Delegation signatures are used', function () {
+              context('All delegation signatures can be decoded', function () {
+                context('None of the delegation signatures have expired', function () {
+                  context('All delegate hash signatures are valid', function () {
+                    context('All delegation signatures are valid', function () {
+                      it('registers hash', async function () {
+                        const { hashTypeA, roles, sortedHashTypeASigners, delegates, hashRegistry } =
+                          await helpers.loadFixture(deployAndSetSigners);
+                        const hash = ethers.hexlify(ethers.randomBytes(32));
+                        const timestamp = await helpers.time.latest();
+                        const delegationEndTimestamp = timestamp + 60 * 60;
+                        const signatures = await signHash(sortedHashTypeASigners, hashTypeA, hash, timestamp);
+                        const delegationSignatures = await signDelegation(
+                          sortedHashTypeASigners,
+                          delegates,
+                          delegationEndTimestamp
+                        );
+                        const delegateSignatures = await signHash(delegates, hashTypeA, hash, timestamp);
+                        const hashBefore = await hashRegistry.hashes(hashTypeA);
+                        expect(hashBefore.value).to.equal(ethers.ZeroHash);
+                        expect(hashBefore.timestamp).to.equal(0);
+                        expect(await hashRegistry.getHashValue(hashTypeA)).to.equal(ethers.ZeroHash);
+                        await expect(
+                          hashRegistry
+                            .connect(roles.randomPerson)
+                            .registerHash(hashTypeA, hash, timestamp, [
+                              ethers.AbiCoder.defaultAbiCoder().encode(
+                                ['uint256', 'bytes', 'bytes'],
+                                [delegationEndTimestamp, delegationSignatures[0], delegateSignatures[0]]
+                              ),
+                              signatures[1]!,
+                              ethers.AbiCoder.defaultAbiCoder().encode(
+                                ['uint256', 'bytes', 'bytes'],
+                                [delegationEndTimestamp, delegationSignatures[2], delegateSignatures[2]]
+                              ),
+                            ])
+                        )
+                          .to.emit(hashRegistry, 'RegisteredHash')
+                          .withArgs(hashTypeA, hash, timestamp);
+                        const hashAfter = await hashRegistry.hashes(hashTypeA);
+                        expect(hashAfter.value).to.equal(hash);
+                        expect(hashAfter.timestamp).to.equal(timestamp);
+                        expect(await hashRegistry.getHashValue(hashTypeA)).to.equal(hash);
+                      });
+                    });
+                    context('Not all delegation signatures are valid', function () {
+                      it('reverts', async function () {
+                        const { hashTypeA, roles, sortedHashTypeASigners, delegates, hashRegistry } =
+                          await helpers.loadFixture(deployAndSetSigners);
+                        const hash = ethers.hexlify(ethers.randomBytes(32));
+                        const timestamp = await helpers.time.latest();
+                        const delegationEndTimestamp = timestamp + 60 * 60;
+                        const signatures = await signHash(sortedHashTypeASigners, hashTypeA, hash, timestamp);
+                        const delegationSignatures = await signDelegation(
+                          sortedHashTypeASigners,
+                          delegates,
+                          delegationEndTimestamp
+                        );
+                        const delegateSignatures = await signHash(delegates, hashTypeA, hash, timestamp);
+                        await expect(
+                          hashRegistry
+                            .connect(roles.randomPerson)
+                            .registerHash(hashTypeA, hash, timestamp, [
+                              ethers.AbiCoder.defaultAbiCoder().encode(
+                                ['uint256', 'bytes', 'bytes'],
+                                [delegationEndTimestamp, delegationSignatures[0], delegateSignatures[0]]
+                              ),
+                              signatures[1]!,
+                              ethers.AbiCoder.defaultAbiCoder().encode(
+                                ['uint256', 'bytes', 'bytes'],
+                                [delegationEndTimestamp, delegationSignatures[1], delegateSignatures[2]]
+                              ),
+                            ])
+                        ).to.be.revertedWith('Signature mismatch');
+                      });
+                    });
+                  });
+                  context('Not all delegate hash signatures are valid', function () {
+                    it('reverts', async function () {
+                      const { hashTypeA, roles, sortedHashTypeASigners, delegates, hashRegistry } =
+                        await helpers.loadFixture(deployAndSetSigners);
+                      const hash = ethers.hexlify(ethers.randomBytes(32));
+                      const timestamp = await helpers.time.latest();
+                      const delegationEndTimestamp = timestamp + 60 * 60;
+                      const signatures = await signHash(sortedHashTypeASigners, hashTypeA, hash, timestamp);
+                      const delegationSignatures = await signDelegation(
+                        sortedHashTypeASigners,
+                        delegates,
+                        delegationEndTimestamp
+                      );
+                      const delegateSignatures = await signHash(delegates, hashTypeA, hash, timestamp);
+                      await expect(
+                        hashRegistry
+                          .connect(roles.randomPerson)
+                          .registerHash(hashTypeA, hash, timestamp, [
+                            ethers.AbiCoder.defaultAbiCoder().encode(
+                              ['uint256', 'bytes', 'bytes'],
+                              [delegationEndTimestamp, delegationSignatures[0], delegateSignatures[0]]
+                            ),
+                            signatures[1]!,
+                            ethers.AbiCoder.defaultAbiCoder().encode(
+                              ['uint256', 'bytes', 'bytes'],
+                              [delegationEndTimestamp, delegationSignatures[2], delegateSignatures[1]]
+                            ),
+                          ])
+                      ).to.be.revertedWith('Signature mismatch');
+                    });
+                  });
+                });
+                context('Some of the delegation signatures have expired', function () {
+                  it('reverts', async function () {
+                    const { hashTypeA, roles, sortedHashTypeASigners, delegates, hashRegistry } =
+                      await helpers.loadFixture(deployAndSetSigners);
+                    const hash = ethers.hexlify(ethers.randomBytes(32));
+                    const timestamp = await helpers.time.latest();
+                    const delegationEndTimestamp = timestamp + 60 * 60;
+                    const signatures = await signHash(sortedHashTypeASigners, hashTypeA, hash, timestamp);
+                    const delegationSignatures = await signDelegation(
+                      sortedHashTypeASigners,
+                      delegates,
+                      delegationEndTimestamp
+                    );
+                    const expiredDelegationSignatures = await signDelegation(
+                      sortedHashTypeASigners,
+                      delegates,
+                      timestamp
+                    );
+                    const delegateSignatures = await signHash(delegates, hashTypeA, hash, timestamp);
+                    await expect(
+                      hashRegistry
+                        .connect(roles.randomPerson)
+                        .registerHash(hashTypeA, hash, timestamp, [
+                          ethers.AbiCoder.defaultAbiCoder().encode(
+                            ['uint256', 'bytes', 'bytes'],
+                            [delegationEndTimestamp, delegationSignatures[0], delegateSignatures[0]]
+                          ),
+                          signatures[1]!,
+                          ethers.AbiCoder.defaultAbiCoder().encode(
+                            ['uint256', 'bytes', 'bytes'],
+                            [timestamp, expiredDelegationSignatures[2], delegateSignatures[2]]
+                          ),
+                        ])
+                    ).to.be.revertedWith('Delegation ended');
+                  });
+                });
+              });
+              context('Not all delegation signatures can be decoded', function () {
+                it('reverts', async function () {
+                  const { hashTypeA, roles, sortedHashTypeASigners, delegates, hashRegistry } =
+                    await helpers.loadFixture(deployAndSetSigners);
+                  const hash = ethers.hexlify(ethers.randomBytes(32));
+                  const timestamp = await helpers.time.latest();
+                  const delegationEndTimestamp = timestamp + 60 * 60;
+                  const signatures = await signHash(sortedHashTypeASigners, hashTypeA, hash, timestamp);
+                  const delegationSignatures = await signDelegation(
+                    sortedHashTypeASigners,
+                    delegates,
+                    delegationEndTimestamp
+                  );
+                  const delegateSignatures = await signHash(delegates, hashTypeA, hash, timestamp);
+                  await expect(
+                    hashRegistry
+                      .connect(roles.randomPerson)
+                      .registerHash(hashTypeA, hash, timestamp, [
+                        ethers.AbiCoder.defaultAbiCoder().encode(
+                          ['uint256', 'bytes', 'bytes'],
+                          [delegationEndTimestamp, delegationSignatures[0], delegateSignatures[0]]
+                        ),
+                        signatures[1]!,
+                        '0x',
+                      ])
+                  ).to.be.revertedWithoutReason();
+                });
               });
             });
           });
