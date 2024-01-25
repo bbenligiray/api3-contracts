@@ -151,7 +151,7 @@ contract HashRegistry is Ownable, IHashRegistry {
                     bytes memory hashSignature
                 ) = abi.decode(signatures[ind], (uint256, bytes, bytes));
                 require(
-                    block.timestamp > delegationEndTimestamp,
+                    block.timestamp < delegationEndTimestamp,
                     "Delegation ended"
                 );
                 signers[ind] = ECDSA.recover(
