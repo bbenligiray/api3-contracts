@@ -17,6 +17,3 @@ dist
 gas_report
 
 contracts/vendor
-
-# TODO: Remove the /test below
-/test

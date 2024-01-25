@@ -1,10 +1,12 @@
+import type { HardhatEthersSigner } from '@nomicfoundation/hardhat-ethers/signers';
 import * as helpers from '@nomicfoundation/hardhat-network-helpers';
 import { expect } from 'chai';
+import type { BytesLike, HDNodeWallet } from 'ethers';
 import { ethers } from 'hardhat';
 
-export async function signHash(signers, hashType, hash, timestamp) {
+export async function signHash(signers: HDNodeWallet[], hashType: BytesLike, hash: BytesLike, timestamp: number) {
   return Promise.all(
-    signers.map((signer) =>
+    signers.map(async (signer) =>
       signer.signMessage(
         ethers.toBeArray(ethers.solidityPackedKeccak256(['bytes32', 'bytes32', 'uint256'], [hashType, hash, timestamp]))
       )
@@ -24,7 +26,7 @@ describe('HashRegistry', function () {
 
     const roleNames = ['deployer', 'owner', 'randomPerson'];
     const accounts = await ethers.getSigners();
-    const roles = roleNames.reduce((acc, roleName, index) => {
+    const roles: Record<string, HardhatEthersSigner> = roleNames.reduce((acc, roleName, index) => {
       return { ...acc, [roleName]: accounts[index] };
     }, {});
     const sortedHashTypeASigners = Array.from({ length: 3 })
@@ -35,7 +37,7 @@ describe('HashRegistry', function () {
       .sort((a, b) => (BigInt(a.address) > BigInt(b.address) ? 1 : -1));
 
     const HashRegistry = await ethers.getContractFactory('HashRegistry', roles.deployer);
-    const hashRegistry = await HashRegistry.deploy(roles.owner.address);
+    const hashRegistry = await HashRegistry.deploy(roles.owner!.address);
 
     return {
       hashTypeA,
@@ -73,7 +75,7 @@ describe('HashRegistry', function () {
     context('Owner address is not zero', function () {
       it('constructs', async function () {
         const { roles, hashRegistry } = await helpers.loadFixture(deploy);
-        expect(await hashRegistry.owner()).to.equal(roles.owner.address);
+        expect(await hashRegistry.owner()).to.equal(roles.owner!.address);
         expect(await hashRegistry.signatureDelegationHashType()).to.equal(SIGNATURE_DELEGATION_HASH_TYPE);
       });
     });
@@ -97,8 +99,8 @@ describe('HashRegistry', function () {
   describe('transferOwnership', function () {
     it('transfers ownership', async function () {
       const { roles, hashRegistry } = await helpers.loadFixture(deploy);
-      await hashRegistry.connect(roles.owner).transferOwnership(roles.randomPerson.address);
-      expect(await hashRegistry.owner()).to.equal(roles.randomPerson.address);
+      await hashRegistry.connect(roles.owner).transferOwnership(roles.randomPerson!.address);
+      expect(await hashRegistry.owner()).to.equal(roles.randomPerson!.address);
     });
   });
 
@@ -137,14 +139,14 @@ describe('HashRegistry', function () {
                 await expect(
                   hashRegistry.connect(roles.owner).setSigners(
                     hashTypeA,
-                    unsortedHashTypeASigners.map((signer) => signer.address)
+                    unsortedHashTypeASigners.map((signer) => signer!.address)
                   )
                 ).to.be.revertedWith('Signers not in ascending order');
                 const duplicatedHashTypeASigners = [sortedHashTypeASigners[1], ...sortedHashTypeASigners.slice(1)];
                 await expect(
                   hashRegistry.connect(roles.owner).setSigners(
                     hashTypeA,
-                    duplicatedHashTypeASigners.map((signer) => signer.address)
+                    duplicatedHashTypeASigners.map((signer) => signer!.address)
                   )
                 ).to.be.revertedWith('Signers not in ascending order');
               });

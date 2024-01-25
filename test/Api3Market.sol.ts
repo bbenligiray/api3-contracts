@@ -1,7 +1,11 @@
+import type { HardhatEthersSigner } from '@nomicfoundation/hardhat-ethers/signers';
 import * as helpers from '@nomicfoundation/hardhat-network-helpers';
 import { StandardMerkleTree } from '@openzeppelin/merkle-tree';
 import { expect } from 'chai';
+import type { AddressLike, BigNumberish, BytesLike, HDNodeWallet } from 'ethers';
 import { artifacts, ethers } from 'hardhat';
+
+import type { Api3Market } from '../src/index';
 
 import { updateBeaconSet, readBeacons, encodeUpdateParameters } from './AirseekerRegistry.sol';
 import { signHash } from './HashRegistry.sol';
@@ -24,13 +28,13 @@ describe('Api3Market', function () {
   const MAXIMUM_DAPI_UPDATE_AGE = 24 * 60 * 60;
 
   async function computeRequiredPaymentAmount(
-    api3Market,
-    dapiName,
-    updateParameters,
-    duration,
-    price,
-    sponsorWalletAddress
-  ) {
+    api3Market: Api3Market,
+    dapiName: BytesLike,
+    updateParameters: BytesLike,
+    duration: number,
+    price: BigNumberish,
+    sponsorWalletAddress: AddressLike
+  ): Promise<BigNumberish> {
     const expectedSponsorWalletBalanceAfterSubscriptionIsAdded =
       await api3Market.computeExpectedSponsorWalletBalanceAfterSubscriptionIsAdded(
         dapiName,
@@ -44,17 +48,17 @@ describe('Api3Market', function () {
       : 0;
   }
 
-  function computeSubscriptionId(dapiName, updateParameters) {
+  function computeSubscriptionId(dapiName: BytesLike, updateParameters: BytesLike) {
     return ethers.solidityPackedKeccak256(['bytes32', 'bytes32'], [dapiName, ethers.keccak256(updateParameters)]);
   }
 
   async function deploy() {
     const roleNames = ['deployer', 'api3ServerV1Manager', 'owner', 'randomPerson'];
     const accounts = await ethers.getSigners();
-    const roles = roleNames.reduce((acc, roleName, index) => {
+    const roles: Record<string, HardhatEthersSigner> = roleNames.reduce((acc, roleName, index) => {
       return { ...acc, [roleName]: accounts[index] };
     }, {});
-    const airnodes = Array.from({ length: 3 }).map(() => ethers.Wallet.createRandom());
+    const airnodes: HDNodeWallet[] = Array.from({ length: 3 }).map(() => ethers.Wallet.createRandom());
     const sortedDapiManagementMerkleRootSigners = Array.from({ length: 5 })
       .map(() => ethers.Wallet.createRandom())
       .sort((a, b) => (BigInt(a.address) > BigInt(b.address) ? 1 : -1));
@@ -74,7 +78,7 @@ describe('Api3Market', function () {
     const api3ServerV1 = await Api3ServerV1.deploy(
       accessControlRegistry.getAddress(),
       api3ServerV1AdminRoleDescription,
-      roles.api3ServerV1Manager.address
+      roles.api3ServerV1Manager!.address
     );
 
     const {
@@ -98,7 +102,7 @@ describe('Api3Market', function () {
     const proxyFactory = await ProxyFactory.deploy(api3ServerV1.getAddress());
 
     const Api3Market = await ethers.getContractFactory('Api3Market', roles.deployer);
-    const api3Market = await Api3Market.deploy(roles.owner.address, proxyFactory.getAddress());
+    const api3Market = await Api3Market.deploy(roles.owner!.address, proxyFactory.getAddress());
 
     await api3Market.connect(roles.owner).setSigners(
       DAPI_MANAGEMENT_MERKLE_ROOT_HASH_TYPE,
@@ -122,7 +126,7 @@ describe('Api3Market', function () {
     await accessControlRegistry
       .connect(roles.api3ServerV1Manager)
       .initializeRoleAndGrantToSender(
-        ethers.solidityPackedKeccak256(['address'], [roles.api3ServerV1Manager.address]),
+        ethers.solidityPackedKeccak256(['address'], [roles.api3ServerV1Manager!.address]),
         api3ServerV1AdminRoleDescription
       );
     await accessControlRegistry
@@ -133,7 +137,7 @@ describe('Api3Market', function () {
       .grantRole(await api3ServerV1.dapiNameSetterRole(), api3Market.getAddress());
 
     const AirseekerRegistry = await artifacts.readArtifact('AirseekerRegistry');
-    const airseekerRegistry = await ethers.getContractAt(
+    const airseekerRegistry: any = await ethers.getContractAt(
       AirseekerRegistry.abi,
       await api3Market.airseekerRegistry(),
       roles.deployer
@@ -153,7 +157,13 @@ describe('Api3Market', function () {
     const hashTimestamp = await helpers.time.latest();
     // Normally, a dAPI management Merkle tree should have a single leaf per
     // dAPI name. We are adding multiple below for test purposes.
-    const dapiManagementMerkleLeaves = {
+    const dapiManagementMerkleLeaves: Record<
+      string,
+      {
+        values: { dapiName: BytesLike; dataFeedId: BytesLike; sponsorWalletAddress: AddressLike };
+        proof?: BytesLike[];
+      }
+    > = {
       ethUsd: {
         values: {
           dapiName,
@@ -192,7 +202,7 @@ describe('Api3Market', function () {
       ethUsdWithASingleBeacon: {
         values: {
           dapiName,
-          dataFeedId: beaconIds[0],
+          dataFeedId: beaconIds[0]!,
           sponsorWalletAddress,
         },
       },
@@ -217,10 +227,10 @@ describe('Api3Market', function () {
       ['bytes32', 'bytes32', 'address']
     );
     Object.keys(dapiManagementMerkleLeaves).map((dapiManagementMerkleLeafKey) => {
-      dapiManagementMerkleLeaves[dapiManagementMerkleLeafKey].proof = dapiManagementMerkleTree.getProof([
-        dapiManagementMerkleLeaves[dapiManagementMerkleLeafKey].values.dapiName,
-        dapiManagementMerkleLeaves[dapiManagementMerkleLeafKey].values.dataFeedId,
-        dapiManagementMerkleLeaves[dapiManagementMerkleLeafKey].values.sponsorWalletAddress,
+      dapiManagementMerkleLeaves[dapiManagementMerkleLeafKey]!.proof = dapiManagementMerkleTree.getProof([
+        dapiManagementMerkleLeaves[dapiManagementMerkleLeafKey]!.values.dapiName,
+        dapiManagementMerkleLeaves[dapiManagementMerkleLeafKey]!.values.dataFeedId,
+        dapiManagementMerkleLeaves[dapiManagementMerkleLeafKey]!.values.sponsorWalletAddress,
       ]);
     });
     const dapiManagementMerkleRoot = dapiManagementMerkleTree.root;
@@ -239,7 +249,19 @@ describe('Api3Market', function () {
     // Normally, a dAPI pricing Merkle tree should not have entries with
     // incomparable update parameters. We are adding such entries below for
     // test purposes.
-    const dapiPricingMerkleLeaves = {
+    const dapiPricingMerkleLeaves: Record<
+      string,
+      {
+        values: {
+          dapiName: BytesLike;
+          chainId: BigNumberish;
+          updateParameters: BytesLike;
+          duration: number;
+          price: BigNumberish;
+        };
+        proof?: string[];
+      }
+    > = {
       onePercentDeviationThresholdForOneMonth: {
         values: {
           dapiName,
@@ -345,12 +367,12 @@ describe('Api3Market', function () {
       ['bytes32', 'uint32', 'bytes', 'uint256', 'uint256']
     );
     Object.keys(dapiPricingMerkleLeaves).map((dapiPricingMerkleLeafKey) => {
-      dapiPricingMerkleLeaves[dapiPricingMerkleLeafKey].proof = dapiPricingMerkleTree.getProof([
-        dapiPricingMerkleLeaves[dapiPricingMerkleLeafKey].values.dapiName,
-        dapiPricingMerkleLeaves[dapiPricingMerkleLeafKey].values.chainId,
-        dapiPricingMerkleLeaves[dapiPricingMerkleLeafKey].values.updateParameters,
-        dapiPricingMerkleLeaves[dapiPricingMerkleLeafKey].values.duration,
-        dapiPricingMerkleLeaves[dapiPricingMerkleLeafKey].values.price,
+      dapiPricingMerkleLeaves[dapiPricingMerkleLeafKey]!.proof = dapiPricingMerkleTree.getProof([
+        dapiPricingMerkleLeaves[dapiPricingMerkleLeafKey]!.values.dapiName,
+        dapiPricingMerkleLeaves[dapiPricingMerkleLeafKey]!.values.chainId,
+        dapiPricingMerkleLeaves[dapiPricingMerkleLeafKey]!.values.updateParameters,
+        dapiPricingMerkleLeaves[dapiPricingMerkleLeafKey]!.values.duration,
+        dapiPricingMerkleLeaves[dapiPricingMerkleLeafKey]!.values.price,
       ]);
     });
     const dapiPricingMerkleRoot = dapiPricingMerkleTree.root;
@@ -366,7 +388,13 @@ describe('Api3Market', function () {
       )
     );
 
-    const signedApiUrlMerkleLeaves = airnodes.reduce((acc, airnode) => {
+    const signedApiUrlMerkleLeaves: Record<
+      string,
+      {
+        values: { airnodeAddress: string; signedApiUrl: string };
+        proof?: string[];
+      }
+    > = airnodes.reduce((acc, airnode) => {
       return {
         ...acc,
         [airnode.address]: {
@@ -394,9 +422,9 @@ describe('Api3Market', function () {
       ['address', 'string']
     );
     Object.keys(signedApiUrlMerkleLeaves).map((signedApiUrlMerkleLeafKey) => {
-      signedApiUrlMerkleLeaves[signedApiUrlMerkleLeafKey].proof = signedApiUrlMerkleTree.getProof([
-        signedApiUrlMerkleLeaves[signedApiUrlMerkleLeafKey].values.airnodeAddress,
-        signedApiUrlMerkleLeaves[signedApiUrlMerkleLeafKey].values.signedApiUrl,
+      signedApiUrlMerkleLeaves[signedApiUrlMerkleLeafKey]!.proof = signedApiUrlMerkleTree.getProof([
+        signedApiUrlMerkleLeaves[signedApiUrlMerkleLeafKey]!.values.airnodeAddress,
+        signedApiUrlMerkleLeaves[signedApiUrlMerkleLeafKey]!.values.signedApiUrl,
       ]);
     });
     const signedApiUrlMerkleRoot = signedApiUrlMerkleTree.root;
@@ -447,7 +475,7 @@ describe('Api3Market', function () {
         expect(await api3Market.SIGNED_API_URL_MERKLE_ROOT_HASH_TYPE()).to.equal(SIGNED_API_URL_MERKLE_ROOT_HASH_TYPE);
         expect(await api3Market.MAXIMUM_DAPI_UPDATE_AGE()).to.equal(MAXIMUM_DAPI_UPDATE_AGE);
         expect(await api3Market.signatureDelegationHashType()).to.equal(SIGNATURE_DELEGATION_HASH_TYPE);
-        expect(await api3Market.owner()).to.equal(roles.owner.address);
+        expect(await api3Market.owner()).to.equal(roles.owner!.address);
         expect(await api3Market.proxyFactory()).to.equal(await proxyFactory.getAddress());
         expect(await api3Market.api3ServerV1()).to.equal(await api3ServerV1.getAddress());
         expect(await airseekerRegistry.owner()).to.equal(await api3Market.getAddress());
@@ -458,14 +486,16 @@ describe('Api3Market', function () {
       it('reverts', async function () {
         const { roles, api3ServerV1 } = await helpers.loadFixture(deploy);
         const Api3Market = await ethers.getContractFactory('Api3Market', roles.deployer);
-        await expect(Api3Market.deploy(roles.owner.address, api3ServerV1.getAddress())).to.be.revertedWithoutReason();
+        await expect(Api3Market.deploy(roles.owner!.address, api3ServerV1.getAddress())).to.be.revertedWithoutReason();
       });
     });
     context('ProxyFactory address does not belong to a contract', function () {
       it('reverts', async function () {
         const { roles } = await helpers.loadFixture(deploy);
         const Api3Market = await ethers.getContractFactory('Api3Market', roles.deployer);
-        await expect(Api3Market.deploy(roles.owner.address, roles.randomPerson.address)).to.be.revertedWithoutReason();
+        await expect(
+          Api3Market.deploy(roles.owner!.address, roles.randomPerson!.address)
+        ).to.be.revertedWithoutReason();
       });
     });
   });
@@ -482,7 +512,7 @@ describe('Api3Market', function () {
   describe('transferOwnership', function () {
     it('reverts', async function () {
       const { roles, api3Market } = await helpers.loadFixture(deploy);
-      await expect(api3Market.connect(roles.owner).transferOwnership(roles.randomPerson.address)).to.be.revertedWith(
+      await expect(api3Market.connect(roles.owner).transferOwnership(roles.randomPerson!.address)).to.be.revertedWith(
         'Ownership cannot be transferred'
       );
     });
@@ -512,37 +542,37 @@ describe('Api3Market', function () {
                     await api3Market.connect(roles.randomPerson).registerDataFeed(dataFeedDetails);
                     const paymentAmount = await computeRequiredPaymentAmount(
                       api3Market,
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                      dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                      dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                      dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                     );
                     const subscriptionTimestamp = (await helpers.time.latest()) + 1;
                     await helpers.time.setNextBlockTimestamp(subscriptionTimestamp);
                     const subscriptionId = computeSubscriptionId(
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters
+                      dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters
                     );
                     expect(
                       await api3Market
                         .connect(roles.randomPerson)
                         .buySubscription.staticCall(
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
-                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                           ),
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                          BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration),
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
                             [
                               dapiPricingMerkleRoot,
-                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof,
                             ]
                           ),
                           {
@@ -554,21 +584,21 @@ describe('Api3Market', function () {
                       api3Market
                         .connect(roles.randomPerson)
                         .buySubscription(
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
-                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                           ),
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
                             [
                               dapiPricingMerkleRoot,
-                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof,
                             ]
                           ),
                           {
@@ -578,41 +608,41 @@ describe('Api3Market', function () {
                     )
                       .to.emit(api3Market, 'UpdatedCurrentSubscriptionId')
                       .withArgs(
-                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                        dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
                         computeSubscriptionId(
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters
                         )
                       )
                       .to.emit(airseekerRegistry, 'UpdatedDapiNameUpdateParameters')
                       .withArgs(
-                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters
+                        dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters
                       )
                       .to.emit(airseekerRegistry, 'ActivatedDapiName')
-                      .withArgs(dapiManagementMerkleLeaves.ethUsd.values.dapiName)
+                      .withArgs(dapiManagementMerkleLeaves.ethUsd!.values.dapiName)
                       .to.emit(api3ServerV1, 'SetDapiName')
                       .withArgs(
-                        dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                        dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                        dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
                         await api3Market.getAddress()
                       )
                       .to.emit(api3Market, 'BoughtSubscription')
                       .withArgs(
-                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                        dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
                         subscriptionId,
-                        dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                        dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                        dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                        dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                         paymentAmount
                       );
                     const dataFeedReading = await api3ServerV1.dataFeeds(
-                      dapiManagementMerkleLeaves.ethUsd.values.dataFeedId
+                      dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId
                     );
                     const beaconReadings = await readBeacons(api3ServerV1, beaconIds);
-                    const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd.values.dapiName);
+                    const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd!.values.dapiName);
                     expect(dapiData.dataFeedDetails).to.equal(dataFeedDetails);
                     expect(dapiData.dapiValue).to.equal(dataFeedReading.value);
                     expect(dapiData.dapiTimestamp).to.equal(dataFeedReading.timestamp);
@@ -623,16 +653,16 @@ describe('Api3Market', function () {
                       beaconReadings.map((beaconReading) => beaconReading.timestamp)
                     );
                     expect(dapiData.updateParameters).to.deep.equal([
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
                     ]);
                     expect(dapiData.endTimestamps).to.deep.equal([
                       subscriptionTimestamp +
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
                     ]);
                     expect(dapiData.dailyPrices).to.deep.equal([
-                      (BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price) *
+                      (BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price) *
                         BigInt(24 * 60 * 60)) /
-                        BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration),
+                        BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration),
                     ]);
                   });
                 });
@@ -656,67 +686,67 @@ describe('Api3Market', function () {
                     await api3Market
                       .connect(roles.randomPerson)
                       .buySubscription(
-                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                        dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                        dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                        dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                        dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                        dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                         ethers.AbiCoder.defaultAbiCoder().encode(
                           ['bytes32', 'bytes32[]'],
-                          [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                          [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                         ),
-                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
                         ethers.AbiCoder.defaultAbiCoder().encode(
                           ['bytes32', 'bytes32[]'],
                           [
                             dapiPricingMerkleRoot,
-                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.proof,
                           ]
                         ),
                         {
                           value: await computeRequiredPaymentAmount(
                             api3Market,
-                            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
-                            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                            dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
+                            dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                           ),
                         }
                       );
                     const paymentAmount2 = await computeRequiredPaymentAmount(
                       api3Market,
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                      dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                      dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                      dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                     );
                     const subscriptionTimestamp2 = (await helpers.time.latest()) + 1;
                     await helpers.time.setNextBlockTimestamp(subscriptionTimestamp2);
                     const subscriptionId = computeSubscriptionId(
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters
+                      dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters
                     );
                     expect(
                       await api3Market
                         .connect(roles.randomPerson)
                         .buySubscription.staticCall(
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
-                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                           ),
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
                             [
                               dapiPricingMerkleRoot,
-                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof,
                             ]
                           ),
                           { value: paymentAmount2 }
@@ -726,21 +756,21 @@ describe('Api3Market', function () {
                       api3Market
                         .connect(roles.randomPerson)
                         .buySubscription(
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
-                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                           ),
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
                             [
                               dapiPricingMerkleRoot,
-                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof,
                             ]
                           ),
                           { value: paymentAmount2 }
@@ -748,35 +778,35 @@ describe('Api3Market', function () {
                     )
                       .to.emit(api3Market, 'UpdatedCurrentSubscriptionId')
                       .withArgs(
-                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                        dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
                         computeSubscriptionId(
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters
                         )
                       )
                       .to.emit(airseekerRegistry, 'UpdatedDapiNameUpdateParameters')
                       .withArgs(
-                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters
+                        dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters
                       )
                       .to.emit(api3Market, 'BoughtSubscription')
                       .withArgs(
-                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                        dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
                         subscriptionId,
-                        dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                        dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                        dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                        dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                         paymentAmount2
                       )
                       .to.not.emit(airseekerRegistry, 'ActivatedDapiName')
                       .to.not.emit(api3ServerV1, 'SetDapiName');
                     const dataFeedReading = await api3ServerV1.dataFeeds(
-                      dapiManagementMerkleLeaves.ethUsd.values.dataFeedId
+                      dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId
                     );
                     const beaconReadings = await readBeacons(api3ServerV1, beaconIds);
-                    const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd.values.dapiName);
+                    const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd!.values.dapiName);
                     expect(dapiData.dataFeedDetails).to.equal(dataFeedDetails);
                     expect(dapiData.dapiValue).to.equal(dataFeedReading.value);
                     expect(dapiData.dapiTimestamp).to.equal(dataFeedReading.timestamp);
@@ -787,52 +817,52 @@ describe('Api3Market', function () {
                       beaconReadings.map((beaconReading) => beaconReading.timestamp)
                     );
                     expect(dapiData.updateParameters).to.deep.equal([
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                      dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                      dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
                     ]);
                     expect(dapiData.endTimestamps).to.deep.equal([
                       subscriptionTimestamp2 +
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
                       subscriptionTimestamp1 +
-                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
                     ]);
                     expect(dapiData.dailyPrices).to.deep.equal([
-                      (BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price) *
+                      (BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price) *
                         BigInt(24 * 60 * 60)) /
-                        BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration),
-                      (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price) *
+                        BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration),
+                      (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price) *
                         BigInt(24 * 60 * 60)) /
-                        BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration),
+                        BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration),
                     ]);
                     // The same subscription can be purchased again after some time passes
                     await helpers.time.increaseTo((await helpers.time.latest()) + 1);
                     const paymentAmount3 = await computeRequiredPaymentAmount(
                       api3Market,
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                      dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                      dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                      dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                     );
                     await expect(
                       api3Market
                         .connect(roles.randomPerson)
                         .buySubscription(
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
-                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                           ),
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
                             [
                               dapiPricingMerkleRoot,
-                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof,
                             ]
                           ),
                           { value: paymentAmount3 }
@@ -840,13 +870,13 @@ describe('Api3Market', function () {
                     )
                       .to.emit(api3Market, 'BoughtSubscription')
                       .withArgs(
-                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                        dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
                         subscriptionId,
-                        dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                        dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                        dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                        dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                         paymentAmount3
                       )
                       .to.not.emit(api3Market, 'UpdatedCurrentSubscriptionId')
@@ -878,70 +908,70 @@ describe('Api3Market', function () {
                       await api3Market
                         .connect(roles.randomPerson)
                         .buySubscription(
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
-                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                           ),
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
                             [
                               dapiPricingMerkleRoot,
-                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof,
                             ]
                           ),
                           {
                             value: await computeRequiredPaymentAmount(
                               api3Market,
-                              dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                              dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                              dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                              dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                             ),
                           }
                         );
                       const paymentAmount2 = await computeRequiredPaymentAmount(
                         api3Market,
-                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
-                        dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                        dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
+                        dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                       );
                       await api3ServerV1
                         .connect(roles.api3ServerV1Manager)
-                        .setDapiName(dapiManagementMerkleLeaves.ethUsd.values.dapiName, ethers.ZeroHash);
+                        .setDapiName(dapiManagementMerkleLeaves.ethUsd!.values.dapiName, ethers.ZeroHash);
                       const subscriptionTimestamp2 = (await helpers.time.latest()) + 1;
                       await helpers.time.setNextBlockTimestamp(subscriptionTimestamp2);
                       const subscriptionId = computeSubscriptionId(
-                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters
+                        dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters
                       );
                       expect(
                         await api3Market
                           .connect(roles.randomPerson)
                           .buySubscription.staticCall(
-                            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                            dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                            dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                            dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                             ethers.AbiCoder.defaultAbiCoder().encode(
                               ['bytes32', 'bytes32[]'],
-                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                             ),
-                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
                             ethers.AbiCoder.defaultAbiCoder().encode(
                               ['bytes32', 'bytes32[]'],
                               [
                                 dapiPricingMerkleRoot,
-                                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof,
+                                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.proof,
                               ]
                             ),
                             { value: paymentAmount2 }
@@ -951,21 +981,21 @@ describe('Api3Market', function () {
                         api3Market
                           .connect(roles.randomPerson)
                           .buySubscription(
-                            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                            dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                            dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                            dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                             ethers.AbiCoder.defaultAbiCoder().encode(
                               ['bytes32', 'bytes32[]'],
-                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                             ),
-                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
                             ethers.AbiCoder.defaultAbiCoder().encode(
                               ['bytes32', 'bytes32[]'],
                               [
                                 dapiPricingMerkleRoot,
-                                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof,
+                                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.proof,
                               ]
                             ),
                             { value: paymentAmount2 }
@@ -973,29 +1003,29 @@ describe('Api3Market', function () {
                       )
                         .to.emit(api3ServerV1, 'SetDapiName')
                         .withArgs(
-                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
                           await api3Market.getAddress()
                         )
                         .to.emit(api3Market, 'BoughtSubscription')
                         .withArgs(
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
                           subscriptionId,
-                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
                           paymentAmount2
                         )
                         .to.not.emit(api3Market, 'UpdatedCurrentSubscriptionId')
                         .to.not.emit(airseekerRegistry, 'UpdatedDapiNameUpdateParameters')
                         .to.not.emit(airseekerRegistry, 'ActivatedDapiName');
                       const dataFeedReading = await api3ServerV1.dataFeeds(
-                        dapiManagementMerkleLeaves.ethUsd.values.dataFeedId
+                        dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId
                       );
                       const beaconReadings = await readBeacons(api3ServerV1, beaconIds);
-                      const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd.values.dapiName);
+                      const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd!.values.dapiName);
                       expect(dapiData.dataFeedDetails).to.equal(dataFeedDetails);
                       expect(dapiData.dapiValue).to.equal(dataFeedReading.value);
                       expect(dapiData.dapiTimestamp).to.equal(dataFeedReading.timestamp);
@@ -1006,22 +1036,22 @@ describe('Api3Market', function () {
                         beaconReadings.map((beaconReading) => beaconReading.timestamp)
                       );
                       expect(dapiData.updateParameters).to.deep.equal([
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
                       ]);
                       expect(dapiData.endTimestamps).to.deep.equal([
                         subscriptionTimestamp1 +
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
                         subscriptionTimestamp2 +
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
                       ]);
                       expect(dapiData.dailyPrices).to.deep.equal([
-                        (BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price) *
+                        (BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price) *
                           BigInt(24 * 60 * 60)) /
-                          BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration),
-                        (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price) *
+                          BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration),
+                        (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price) *
                           BigInt(24 * 60 * 60)) /
-                          BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration),
+                          BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration),
                       ]);
                     });
                   });
@@ -1045,67 +1075,67 @@ describe('Api3Market', function () {
                       await api3Market
                         .connect(roles.randomPerson)
                         .buySubscription(
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
-                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                           ),
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
                             [
                               dapiPricingMerkleRoot,
-                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof,
                             ]
                           ),
                           {
                             value: await computeRequiredPaymentAmount(
                               api3Market,
-                              dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                              dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                              dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                              dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                             ),
                           }
                         );
                       const paymentAmount2 = await computeRequiredPaymentAmount(
                         api3Market,
-                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
-                        dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                        dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
+                        dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                       );
                       const subscriptionTimestamp2 = (await helpers.time.latest()) + 1;
                       await helpers.time.setNextBlockTimestamp(subscriptionTimestamp2);
                       const subscriptionId = computeSubscriptionId(
-                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters
+                        dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters
                       );
                       expect(
                         await api3Market
                           .connect(roles.randomPerson)
                           .buySubscription.staticCall(
-                            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                            dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                            dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                            dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                             ethers.AbiCoder.defaultAbiCoder().encode(
                               ['bytes32', 'bytes32[]'],
-                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                             ),
-                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
                             ethers.AbiCoder.defaultAbiCoder().encode(
                               ['bytes32', 'bytes32[]'],
                               [
                                 dapiPricingMerkleRoot,
-                                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof,
+                                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.proof,
                               ]
                             ),
                             { value: paymentAmount2 }
@@ -1115,21 +1145,21 @@ describe('Api3Market', function () {
                         api3Market
                           .connect(roles.randomPerson)
                           .buySubscription(
-                            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                            dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                            dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                            dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                             ethers.AbiCoder.defaultAbiCoder().encode(
                               ['bytes32', 'bytes32[]'],
-                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                             ),
-                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
                             ethers.AbiCoder.defaultAbiCoder().encode(
                               ['bytes32', 'bytes32[]'],
                               [
                                 dapiPricingMerkleRoot,
-                                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof,
+                                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.proof,
                               ]
                             ),
                             { value: paymentAmount2 }
@@ -1137,13 +1167,13 @@ describe('Api3Market', function () {
                       )
                         .to.emit(api3Market, 'BoughtSubscription')
                         .withArgs(
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
                           subscriptionId,
-                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
                           paymentAmount2
                         )
                         .to.not.emit(api3Market, 'UpdatedCurrentSubscriptionId')
@@ -1151,10 +1181,10 @@ describe('Api3Market', function () {
                         .to.not.emit(airseekerRegistry, 'ActivatedDapiName')
                         .to.not.emit(api3ServerV1, 'SetDapiName');
                       const dataFeedReading = await api3ServerV1.dataFeeds(
-                        dapiManagementMerkleLeaves.ethUsd.values.dataFeedId
+                        dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId
                       );
                       const beaconReadings = await readBeacons(api3ServerV1, beaconIds);
-                      const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd.values.dapiName);
+                      const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd!.values.dapiName);
                       expect(dapiData.dataFeedDetails).to.equal(dataFeedDetails);
                       expect(dapiData.dapiValue).to.equal(dataFeedReading.value);
                       expect(dapiData.dapiTimestamp).to.equal(dataFeedReading.timestamp);
@@ -1165,22 +1195,22 @@ describe('Api3Market', function () {
                         beaconReadings.map((beaconReading) => beaconReading.timestamp)
                       );
                       expect(dapiData.updateParameters).to.deep.equal([
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
                       ]);
                       expect(dapiData.endTimestamps).to.deep.equal([
                         subscriptionTimestamp1 +
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
                         subscriptionTimestamp2 +
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
                       ]);
                       expect(dapiData.dailyPrices).to.deep.equal([
-                        (BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price) *
+                        (BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price) *
                           BigInt(24 * 60 * 60)) /
-                          BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration),
-                        (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price) *
+                          BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration),
+                        (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price) *
                           BigInt(24 * 60 * 60)) /
-                          BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration),
+                          BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration),
                       ]);
                     });
                   });
@@ -1207,31 +1237,31 @@ describe('Api3Market', function () {
                       await api3Market
                         .connect(roles.randomPerson)
                         .buySubscription(
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
-                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                           ),
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
                             [
                               dapiPricingMerkleRoot,
-                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof,
                             ]
                           ),
                           {
                             value: await computeRequiredPaymentAmount(
                               api3Market,
-                              dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                              dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                              dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                              dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                             ),
                           }
                         );
@@ -1240,48 +1270,48 @@ describe('Api3Market', function () {
                       await api3Market
                         .connect(roles.randomPerson)
                         .buySubscription(
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
-                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                           ),
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
                             [
                               dapiPricingMerkleRoot,
-                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof,
+                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.proof,
                             ]
                           ),
                           {
                             value: await computeRequiredPaymentAmount(
                               api3Market,
-                              dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
-                              dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                              dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
+                              dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                             ),
                           }
                         );
                       const paymentAmount3 = await computeRequiredPaymentAmount(
                         api3Market,
-                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
-                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
-                        dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                        dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters,
+                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
+                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price,
+                        dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                       );
                       await api3ServerV1
                         .connect(roles.api3ServerV1Manager)
-                        .setDapiName(dapiManagementMerkleLeaves.ethUsd.values.dapiName, ethers.ZeroHash);
+                        .setDapiName(dapiManagementMerkleLeaves.ethUsd!.values.dapiName, ethers.ZeroHash);
                       const subscriptionTimestamp3 =
                         subscriptionTimestamp1 +
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration;
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration;
                       await helpers.time.setNextBlockTimestamp(subscriptionTimestamp3 - 60);
                       await updateBeaconSet(
                         api3ServerV1,
@@ -1292,29 +1322,29 @@ describe('Api3Market', function () {
                       );
                       await helpers.time.setNextBlockTimestamp(subscriptionTimestamp3);
                       const subscriptionId = computeSubscriptionId(
-                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters
+                        dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters
                       );
                       expect(
                         await api3Market
                           .connect(roles.randomPerson)
                           .buySubscription.staticCall(
-                            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                            dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                            dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                            dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                             ethers.AbiCoder.defaultAbiCoder().encode(
                               ['bytes32', 'bytes32[]'],
-                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                             ),
-                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values
                               .updateParameters,
-                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price,
                             ethers.AbiCoder.defaultAbiCoder().encode(
                               ['bytes32', 'bytes32[]'],
                               [
                                 dapiPricingMerkleRoot,
-                                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.proof,
+                                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.proof,
                               ]
                             ),
                             { value: paymentAmount3 }
@@ -1324,22 +1354,22 @@ describe('Api3Market', function () {
                         api3Market
                           .connect(roles.randomPerson)
                           .buySubscription(
-                            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                            dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                            dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                            dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                             ethers.AbiCoder.defaultAbiCoder().encode(
                               ['bytes32', 'bytes32[]'],
-                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                             ),
-                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values
                               .updateParameters,
-                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price,
                             ethers.AbiCoder.defaultAbiCoder().encode(
                               ['bytes32', 'bytes32[]'],
                               [
                                 dapiPricingMerkleRoot,
-                                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.proof,
+                                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.proof,
                               ]
                             ),
                             { value: paymentAmount3 }
@@ -1347,40 +1377,40 @@ describe('Api3Market', function () {
                       )
                         .to.emit(api3Market, 'UpdatedCurrentSubscriptionId')
                         .withArgs(
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
                           computeSubscriptionId(
-                            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters
+                            dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters
                           )
                         )
                         .to.emit(airseekerRegistry, 'UpdatedDapiNameUpdateParameters')
                         .withArgs(
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters
                         )
                         .to.emit(api3ServerV1, 'SetDapiName')
                         .withArgs(
-                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
                           await api3Market.getAddress()
                         )
                         .to.emit(api3Market, 'BoughtSubscription')
                         .withArgs(
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
                           subscriptionId,
-                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
-                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
-                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
+                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters,
+                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
+                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price,
                           paymentAmount3
                         )
                         .to.not.emit(airseekerRegistry, 'ActivatedDapiName');
                       const dataFeedReading = await api3ServerV1.dataFeeds(
-                        dapiManagementMerkleLeaves.ethUsd.values.dataFeedId
+                        dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId
                       );
                       const beaconReadings = await readBeacons(api3ServerV1, beaconIds);
-                      const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd.values.dapiName);
+                      const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd!.values.dapiName);
                       expect(dapiData.dataFeedDetails).to.equal(dataFeedDetails);
                       expect(dapiData.dapiValue).to.equal(dataFeedReading.value);
                       expect(dapiData.dapiTimestamp).to.equal(dataFeedReading.timestamp);
@@ -1391,22 +1421,22 @@ describe('Api3Market', function () {
                         beaconReadings.map((beaconReading) => beaconReading.timestamp)
                       );
                       expect(dapiData.updateParameters).to.deep.equal([
-                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters,
                       ]);
                       expect(dapiData.endTimestamps).to.deep.equal([
                         subscriptionTimestamp2 +
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
                         subscriptionTimestamp3 +
-                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
+                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
                       ]);
                       expect(dapiData.dailyPrices).to.deep.equal([
-                        (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price) *
+                        (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price) *
                           BigInt(24 * 60 * 60)) /
-                          BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration),
-                        (BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price) *
+                          BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration),
+                        (BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price) *
                           BigInt(24 * 60 * 60)) /
-                          BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration),
+                          BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration),
                       ]);
                     });
                   });
@@ -1431,31 +1461,31 @@ describe('Api3Market', function () {
                       await api3Market
                         .connect(roles.randomPerson)
                         .buySubscription(
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
-                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                           ),
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
                             [
                               dapiPricingMerkleRoot,
-                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof,
                             ]
                           ),
                           {
                             value: await computeRequiredPaymentAmount(
                               api3Market,
-                              dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                              dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                              dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                              dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                             ),
                           }
                         );
@@ -1464,45 +1494,45 @@ describe('Api3Market', function () {
                       await api3Market
                         .connect(roles.randomPerson)
                         .buySubscription(
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
-                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                           ),
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
                           ethers.AbiCoder.defaultAbiCoder().encode(
                             ['bytes32', 'bytes32[]'],
                             [
                               dapiPricingMerkleRoot,
-                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof,
+                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.proof,
                             ]
                           ),
                           {
                             value: await computeRequiredPaymentAmount(
                               api3Market,
-                              dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
-                              dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                              dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
+                              dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                             ),
                           }
                         );
                       const paymentAmount3 = await computeRequiredPaymentAmount(
                         api3Market,
-                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
-                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
-                        dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                        dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters,
+                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
+                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price,
+                        dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                       );
                       const subscriptionTimestamp3 =
                         subscriptionTimestamp1 +
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration;
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration;
                       await helpers.time.setNextBlockTimestamp(subscriptionTimestamp3 - 60);
                       await updateBeaconSet(
                         api3ServerV1,
@@ -1513,29 +1543,29 @@ describe('Api3Market', function () {
                       );
                       await helpers.time.setNextBlockTimestamp(subscriptionTimestamp3);
                       const subscriptionId = computeSubscriptionId(
-                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters
+                        dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters
                       );
                       expect(
                         await api3Market
                           .connect(roles.randomPerson)
                           .buySubscription.staticCall(
-                            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                            dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                            dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                            dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                             ethers.AbiCoder.defaultAbiCoder().encode(
                               ['bytes32', 'bytes32[]'],
-                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                             ),
-                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values
                               .updateParameters,
-                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price,
                             ethers.AbiCoder.defaultAbiCoder().encode(
                               ['bytes32', 'bytes32[]'],
                               [
                                 dapiPricingMerkleRoot,
-                                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.proof,
+                                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.proof,
                               ]
                             ),
                             { value: paymentAmount3 }
@@ -1545,22 +1575,22 @@ describe('Api3Market', function () {
                         api3Market
                           .connect(roles.randomPerson)
                           .buySubscription(
-                            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                            dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                            dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                            dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                             ethers.AbiCoder.defaultAbiCoder().encode(
                               ['bytes32', 'bytes32[]'],
-                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                             ),
-                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values
                               .updateParameters,
-                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
+                            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price,
                             ethers.AbiCoder.defaultAbiCoder().encode(
                               ['bytes32', 'bytes32[]'],
                               [
                                 dapiPricingMerkleRoot,
-                                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.proof,
+                                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.proof,
                               ]
                             ),
                             { value: paymentAmount3 }
@@ -1568,35 +1598,35 @@ describe('Api3Market', function () {
                       )
                         .to.emit(api3Market, 'UpdatedCurrentSubscriptionId')
                         .withArgs(
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
                           computeSubscriptionId(
-                            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters
+                            dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters
                           )
                         )
                         .to.emit(airseekerRegistry, 'UpdatedDapiNameUpdateParameters')
                         .withArgs(
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters
                         )
                         .to.emit(api3Market, 'BoughtSubscription')
                         .withArgs(
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
                           subscriptionId,
-                          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
-                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
-                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                          dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
+                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters,
+                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
+                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price,
                           paymentAmount3
                         )
                         .to.not.emit(airseekerRegistry, 'ActivatedDapiName')
                         .to.not.emit(api3ServerV1, 'SetDapiName');
                       const dataFeedReading = await api3ServerV1.dataFeeds(
-                        dapiManagementMerkleLeaves.ethUsd.values.dataFeedId
+                        dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId
                       );
                       const beaconReadings = await readBeacons(api3ServerV1, beaconIds);
-                      const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd.values.dapiName);
+                      const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd!.values.dapiName);
                       expect(dapiData.dataFeedDetails).to.equal(dataFeedDetails);
                       expect(dapiData.dapiValue).to.equal(dataFeedReading.value);
                       expect(dapiData.dapiTimestamp).to.equal(dataFeedReading.timestamp);
@@ -1607,22 +1637,22 @@ describe('Api3Market', function () {
                         beaconReadings.map((beaconReading) => beaconReading.timestamp)
                       );
                       expect(dapiData.updateParameters).to.deep.equal([
-                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
+                        dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                        dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters,
                       ]);
                       expect(dapiData.endTimestamps).to.deep.equal([
                         subscriptionTimestamp2 +
-                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
+                          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
                         subscriptionTimestamp3 +
-                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
+                          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
                       ]);
                       expect(dapiData.dailyPrices).to.deep.equal([
-                        (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price) *
+                        (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price) *
                           BigInt(24 * 60 * 60)) /
-                          BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration),
-                        (BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price) *
+                          BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration),
+                        (BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price) *
                           BigInt(24 * 60 * 60)) /
-                          BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration),
+                          BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration),
                       ]);
                     });
                   });
@@ -1645,31 +1675,31 @@ describe('Api3Market', function () {
                   api3Market
                     .connect(roles.randomPerson)
                     .buySubscription(
-                      dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet.values.dapiName,
-                      dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet.values.dataFeedId,
-                      dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet.values.sponsorWalletAddress,
+                      dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet!.values.dapiName,
+                      dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet!.values.dataFeedId,
+                      dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet!.values.sponsorWalletAddress,
                       ethers.AbiCoder.defaultAbiCoder().encode(
                         ['bytes32', 'bytes32[]'],
                         [
                           dapiManagementMerkleRoot,
-                          dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet.proof,
+                          dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet!.proof,
                         ]
                       ),
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                       ethers.AbiCoder.defaultAbiCoder().encode(
                         ['bytes32', 'bytes32[]'],
-                        [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+                        [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
                       ),
                       {
                         value: await computeRequiredPaymentAmount(
                           api3Market,
-                          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                          dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                         ),
                       }
                     )
@@ -1693,34 +1723,34 @@ describe('Api3Market', function () {
               } = await helpers.loadFixture(deploy);
               await api3Market.connect(roles.randomPerson).registerDataFeed(dataFeedDetails);
               await mockContractWithNoDefaultPayable.customPayable({
-                value: dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                value: dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
               });
               const subscriptionTimestamp = (await helpers.time.latest()) + 1;
               await helpers.time.setNextBlockTimestamp(subscriptionTimestamp);
               const subscriptionId = computeSubscriptionId(
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters
               );
               expect(
                 await api3Market
                   .connect(roles.randomPerson)
                   .buySubscription.staticCall(
-                    dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet.values.dapiName,
-                    dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet.values.dataFeedId,
-                    dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet.values.sponsorWalletAddress,
+                    dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet!.values.dapiName,
+                    dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet!.values.dataFeedId,
+                    dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet!.values.sponsorWalletAddress,
                     ethers.AbiCoder.defaultAbiCoder().encode(
                       ['bytes32', 'bytes32[]'],
                       [
                         dapiManagementMerkleRoot,
-                        dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet.proof,
+                        dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet!.proof,
                       ]
                     ),
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                     ethers.AbiCoder.defaultAbiCoder().encode(
                       ['bytes32', 'bytes32[]'],
-                      [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+                      [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
                     )
                   )
               ).to.equal(subscriptionId);
@@ -1728,39 +1758,41 @@ describe('Api3Market', function () {
                 api3Market
                   .connect(roles.randomPerson)
                   .buySubscription(
-                    dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet.values.dapiName,
-                    dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet.values.dataFeedId,
-                    dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet.values.sponsorWalletAddress,
+                    dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet!.values.dapiName,
+                    dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet!.values.dataFeedId,
+                    dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet!.values.sponsorWalletAddress,
                     ethers.AbiCoder.defaultAbiCoder().encode(
                       ['bytes32', 'bytes32[]'],
                       [
                         dapiManagementMerkleRoot,
-                        dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet.proof,
+                        dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet!.proof,
                       ]
                     ),
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                     ethers.AbiCoder.defaultAbiCoder().encode(
                       ['bytes32', 'bytes32[]'],
-                      [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+                      [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
                     )
                   )
               )
                 .to.emit(api3Market, 'BoughtSubscription')
                 .withArgs(
-                  dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet.values.dapiName,
+                  dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet!.values.dapiName,
                   subscriptionId,
-                  dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet.values.sponsorWalletAddress,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                  dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsdWithNoDefaultPayableSponsorWallet!.values.sponsorWalletAddress,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                   0
                 );
-              const dataFeedReading = await api3ServerV1.dataFeeds(dapiManagementMerkleLeaves.ethUsd.values.dataFeedId);
+              const dataFeedReading = await api3ServerV1.dataFeeds(
+                dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId
+              );
               const beaconReadings = await readBeacons(api3ServerV1, beaconIds);
-              const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd.values.dapiName);
+              const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd!.values.dapiName);
               expect(dapiData.dataFeedDetails).to.equal(dataFeedDetails);
               expect(dapiData.dapiValue).to.equal(dataFeedReading.value);
               expect(dapiData.dapiTimestamp).to.equal(dataFeedReading.timestamp);
@@ -1769,15 +1801,16 @@ describe('Api3Market', function () {
                 beaconReadings.map((beaconReading) => beaconReading.timestamp)
               );
               expect(dapiData.updateParameters).to.deep.equal([
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
               ]);
               expect(dapiData.endTimestamps).to.deep.equal([
-                subscriptionTimestamp + dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
+                subscriptionTimestamp +
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
               ]);
               expect(dapiData.dailyPrices).to.deep.equal([
-                (BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price) *
+                (BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price) *
                   BigInt(24 * 60 * 60)) /
-                  BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration),
+                  BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration),
               ]);
             });
           });
@@ -1798,30 +1831,32 @@ describe('Api3Market', function () {
               api3Market
                 .connect(roles.randomPerson)
                 .buySubscription(
-                  dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                  dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                   ),
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
                   ),
                   {
                     value:
-                      (await computeRequiredPaymentAmount(
-                        api3Market,
-                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                        dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
-                      )) - BigInt(1),
+                      BigInt(
+                        await computeRequiredPaymentAmount(
+                          api3Market,
+                          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                          dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
+                        )
+                      ) - BigInt(1),
                   }
                 )
             ).to.be.revertedWith('Insufficient payment');
@@ -1844,28 +1879,28 @@ describe('Api3Market', function () {
             await api3Market
               .connect(roles.randomPerson)
               .buySubscription(
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                 ),
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
                 ),
                 {
                   value: await computeRequiredPaymentAmount(
                     api3Market,
-                    dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                    dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                    dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                    dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                   ),
                 }
               );
@@ -1873,30 +1908,30 @@ describe('Api3Market', function () {
               api3Market
                 .connect(roles.randomPerson)
                 .buySubscription(
-                  dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                  dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                   ),
-                  dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonthsWithNonZeroDeviationReference.values
+                  dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonthsWithNonZeroDeviationReference!.values
                     .updateParameters,
-                  dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonthsWithNonZeroDeviationReference.values
+                  dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonthsWithNonZeroDeviationReference!.values
                     .duration,
-                  dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonthsWithNonZeroDeviationReference.values
+                  dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonthsWithNonZeroDeviationReference!.values
                     .price,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
                     [
                       dapiPricingMerkleRoot,
-                      dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonthsWithNonZeroDeviationReference
+                      dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonthsWithNonZeroDeviationReference!
                         .proof,
                     ]
                   ),
                   {
                     value:
-                      dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonthsWithNonZeroDeviationReference
+                      dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonthsWithNonZeroDeviationReference!
                         .values.price,
                   }
                 )
@@ -1920,28 +1955,28 @@ describe('Api3Market', function () {
               await api3Market
                 .connect(roles.randomPerson)
                 .buySubscription(
-                  dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                  dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                   ),
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
                   ),
                   {
                     value: await computeRequiredPaymentAmount(
                       api3Market,
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                      dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                      dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                      dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                     ),
                   }
                 );
@@ -1949,30 +1984,30 @@ describe('Api3Market', function () {
                 api3Market
                   .connect(roles.randomPerson)
                   .buySubscription(
-                    dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                    dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                    dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                    dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                    dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                    dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                     ethers.AbiCoder.defaultAbiCoder().encode(
                       ['bytes32', 'bytes32[]'],
-                      [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                      [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                     ),
-                    dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonthsWithHourlyHeartbeatInterval.values
+                    dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonthsWithHourlyHeartbeatInterval!.values
                       .updateParameters,
-                    dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonthsWithHourlyHeartbeatInterval.values
+                    dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonthsWithHourlyHeartbeatInterval!.values
                       .duration,
-                    dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonthsWithHourlyHeartbeatInterval.values
+                    dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonthsWithHourlyHeartbeatInterval!.values
                       .price,
                     ethers.AbiCoder.defaultAbiCoder().encode(
                       ['bytes32', 'bytes32[]'],
                       [
                         dapiPricingMerkleRoot,
-                        dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonthsWithHourlyHeartbeatInterval
+                        dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonthsWithHourlyHeartbeatInterval!
                           .proof,
                       ]
                     ),
                     {
                       value:
-                        dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonthsWithHourlyHeartbeatInterval
+                        dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonthsWithHourlyHeartbeatInterval!
                           .values.price,
                     }
                   )
@@ -1995,41 +2030,41 @@ describe('Api3Market', function () {
             await api3Market
               .connect(roles.randomPerson)
               .buySubscription(
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                 ),
-                dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonths.values.updateParameters,
-                dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonths.values.duration,
-                dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonths.values.price,
+                dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonths!.values.updateParameters,
+                dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonths!.values.duration,
+                dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonths!.values.price,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonths.proof]
+                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonths!.proof]
                 ),
-                { value: dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonths.values.price }
+                { value: dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonths!.values.price }
               );
             await expect(
               api3Market
                 .connect(roles.randomPerson)
                 .buySubscription(
-                  dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                  dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                   ),
-                  dapiPricingMerkleLeaves.sixPercentDeviationThresholdForOneMonth.values.updateParameters,
-                  dapiPricingMerkleLeaves.sixPercentDeviationThresholdForOneMonth.values.duration,
-                  dapiPricingMerkleLeaves.sixPercentDeviationThresholdForOneMonth.values.price,
+                  dapiPricingMerkleLeaves.sixPercentDeviationThresholdForOneMonth!.values.updateParameters,
+                  dapiPricingMerkleLeaves.sixPercentDeviationThresholdForOneMonth!.values.duration,
+                  dapiPricingMerkleLeaves.sixPercentDeviationThresholdForOneMonth!.values.price,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.sixPercentDeviationThresholdForOneMonth.proof]
+                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.sixPercentDeviationThresholdForOneMonth!.proof]
                   ),
-                  { value: dapiPricingMerkleLeaves.sixPercentDeviationThresholdForOneMonth.values.price }
+                  { value: dapiPricingMerkleLeaves.sixPercentDeviationThresholdForOneMonth!.values.price }
                 )
             ).to.be.revertedWith('Subscription does not upgrade');
           });
@@ -2049,140 +2084,140 @@ describe('Api3Market', function () {
             await api3Market
               .connect(roles.randomPerson)
               .buySubscription(
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                 ),
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
                 ),
                 {
                   value: await computeRequiredPaymentAmount(
                     api3Market,
-                    dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                    dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                    dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                    dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                   ),
                 }
               );
             await api3Market
               .connect(roles.randomPerson)
               .buySubscription(
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                 ),
-                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof]
+                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.proof]
                 ),
                 {
                   value: await computeRequiredPaymentAmount(
                     api3Market,
-                    dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                    dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                    dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                    dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
-                    dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                    dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                    dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                    dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                    dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
+                    dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                   ),
                 }
               );
             await api3Market
               .connect(roles.randomPerson)
               .buySubscription(
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                 ),
-                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
-                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
+                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters,
+                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
+                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.proof]
+                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.proof]
                 ),
                 {
                   value: await computeRequiredPaymentAmount(
                     api3Market,
-                    dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                    dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
-                    dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-                    dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
-                    dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                    dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                    dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters,
+                    dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
+                    dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price,
+                    dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                   ),
                 }
               );
             await api3Market
               .connect(roles.randomPerson)
               .buySubscription(
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                 ),
-                dapiPricingMerkleLeaves.fourPercentDeviationThresholdForFourMonths.values.updateParameters,
-                dapiPricingMerkleLeaves.fourPercentDeviationThresholdForFourMonths.values.duration,
-                dapiPricingMerkleLeaves.fourPercentDeviationThresholdForFourMonths.values.price,
+                dapiPricingMerkleLeaves.fourPercentDeviationThresholdForFourMonths!.values.updateParameters,
+                dapiPricingMerkleLeaves.fourPercentDeviationThresholdForFourMonths!.values.duration,
+                dapiPricingMerkleLeaves.fourPercentDeviationThresholdForFourMonths!.values.price,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.fourPercentDeviationThresholdForFourMonths.proof]
+                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.fourPercentDeviationThresholdForFourMonths!.proof]
                 ),
                 {
                   value: await computeRequiredPaymentAmount(
                     api3Market,
-                    dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                    dapiPricingMerkleLeaves.fourPercentDeviationThresholdForFourMonths.values.updateParameters,
-                    dapiPricingMerkleLeaves.fourPercentDeviationThresholdForFourMonths.values.duration,
-                    dapiPricingMerkleLeaves.fourPercentDeviationThresholdForFourMonths.values.price,
-                    dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                    dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                    dapiPricingMerkleLeaves.fourPercentDeviationThresholdForFourMonths!.values.updateParameters,
+                    dapiPricingMerkleLeaves.fourPercentDeviationThresholdForFourMonths!.values.duration,
+                    dapiPricingMerkleLeaves.fourPercentDeviationThresholdForFourMonths!.values.price,
+                    dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                   ),
                 }
               );
             await api3Market
               .connect(roles.randomPerson)
               .buySubscription(
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                 ),
-                dapiPricingMerkleLeaves.fivePercentDeviationThresholdForFiveMonths.values.updateParameters,
-                dapiPricingMerkleLeaves.fivePercentDeviationThresholdForFiveMonths.values.duration,
-                dapiPricingMerkleLeaves.fivePercentDeviationThresholdForFiveMonths.values.price,
+                dapiPricingMerkleLeaves.fivePercentDeviationThresholdForFiveMonths!.values.updateParameters,
+                dapiPricingMerkleLeaves.fivePercentDeviationThresholdForFiveMonths!.values.duration,
+                dapiPricingMerkleLeaves.fivePercentDeviationThresholdForFiveMonths!.values.price,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.fivePercentDeviationThresholdForFiveMonths.proof]
+                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.fivePercentDeviationThresholdForFiveMonths!.proof]
                 ),
                 {
                   value: await computeRequiredPaymentAmount(
                     api3Market,
-                    dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                    dapiPricingMerkleLeaves.fivePercentDeviationThresholdForFiveMonths.values.updateParameters,
-                    dapiPricingMerkleLeaves.fivePercentDeviationThresholdForFiveMonths.values.duration,
-                    dapiPricingMerkleLeaves.fivePercentDeviationThresholdForFiveMonths.values.price,
-                    dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                    dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                    dapiPricingMerkleLeaves.fivePercentDeviationThresholdForFiveMonths!.values.updateParameters,
+                    dapiPricingMerkleLeaves.fivePercentDeviationThresholdForFiveMonths!.values.duration,
+                    dapiPricingMerkleLeaves.fivePercentDeviationThresholdForFiveMonths!.values.price,
+                    dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                   ),
                 }
               );
@@ -2190,21 +2225,21 @@ describe('Api3Market', function () {
               api3Market
                 .connect(roles.randomPerson)
                 .buySubscription(
-                  dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                  dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                   ),
-                  dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonths.values.updateParameters,
-                  dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonths.values.duration,
-                  dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonths.values.price,
+                  dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonths!.values.updateParameters,
+                  dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonths!.values.duration,
+                  dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonths!.values.price,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonths.proof]
+                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonths!.proof]
                   ),
-                  { value: dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonths.values.price }
+                  { value: dapiPricingMerkleLeaves.sixPercentDeviationThresholdForSixMonths!.values.price }
                 )
             ).to.be.revertedWith('Subscription queue full');
           });
@@ -2222,34 +2257,34 @@ describe('Api3Market', function () {
               dapiPricingMerkleRoot,
             } = await helpers.loadFixture(deploy);
             await api3Market.connect(roles.randomPerson).registerDataFeed(dataFeedDetails);
-            const dataFeedReading = await api3ServerV1.dataFeeds(dapiManagementMerkleLeaves.ethUsd.values.dataFeedId);
+            const dataFeedReading = await api3ServerV1.dataFeeds(dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId);
             await helpers.time.setNextBlockTimestamp(dataFeedReading.timestamp + BigInt(MAXIMUM_DAPI_UPDATE_AGE + 1));
             await expect(
               api3Market
                 .connect(roles.randomPerson)
                 .buySubscription(
-                  dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                  dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                   ),
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
                   ),
                   {
                     value: await computeRequiredPaymentAmount(
                       api3Market,
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                      dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                      dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                      dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                     ),
                   }
                 )
@@ -2270,28 +2305,28 @@ describe('Api3Market', function () {
               api3Market
                 .connect(roles.randomPerson)
                 .buySubscription(
-                  dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                  dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                   ),
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
                   ),
                   {
                     value: await computeRequiredPaymentAmount(
                       api3Market,
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                      dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                      dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                      dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                     ),
                   }
                 )
@@ -2321,28 +2356,28 @@ describe('Api3Market', function () {
                 api3Market
                   .connect(roles.randomPerson)
                   .buySubscription(
-                    dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                    dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                    dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                    dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                    dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                    dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                     ethers.AbiCoder.defaultAbiCoder().encode(
                       ['bytes32', 'bytes32[]'],
-                      [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                      [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                     ),
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                     ethers.AbiCoder.defaultAbiCoder().encode(
                       ['bytes32', 'bytes32[]'],
-                      [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+                      [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
                     ),
                     {
                       value: await computeRequiredPaymentAmount(
                         api3Market,
-                        dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                        dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                        dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                        dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                        dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                       ),
                     }
                   )
@@ -2367,28 +2402,28 @@ describe('Api3Market', function () {
             api3Market
               .connect(roles.randomPerson)
               .buySubscription(
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
                 ethers.ZeroHash,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                 ),
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
                 ),
                 {
                   value: await computeRequiredPaymentAmount(
                     api3Market,
-                    dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                    dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                    dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                    dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                   ),
                 }
               )
@@ -2409,28 +2444,28 @@ describe('Api3Market', function () {
             api3Market
               .connect(roles.randomPerson)
               .buySubscription(
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
                 ethers.ZeroAddress,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                 ),
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
                 ),
                 {
                   value: await computeRequiredPaymentAmount(
                     api3Market,
-                    dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                    dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                    dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                    dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                   ),
                 }
               )
@@ -2453,27 +2488,27 @@ describe('Api3Market', function () {
                 .connect(roles.randomPerson)
                 .buySubscription(
                   ethers.ZeroHash,
-                  dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                   ),
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
                   ),
                   {
                     value: await computeRequiredPaymentAmount(
                       api3Market,
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                      dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                      dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                      dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                     ),
                   }
                 )
@@ -2488,25 +2523,25 @@ describe('Api3Market', function () {
               api3Market
                 .connect(roles.randomPerson)
                 .buySubscription(
-                  dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                  dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                   '0x',
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
                   ),
                   {
                     value: await computeRequiredPaymentAmount(
                       api3Market,
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                      dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                      dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                      dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                     ),
                   }
                 )
@@ -2521,28 +2556,28 @@ describe('Api3Market', function () {
               api3Market
                 .connect(roles.randomPerson)
                 .buySubscription(
-                  dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                  dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [ethers.ZeroHash, dapiManagementMerkleLeaves.ethUsd.proof]
+                    [ethers.ZeroHash, dapiManagementMerkleLeaves.ethUsd!.proof]
                   ),
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
                   ),
                   {
                     value: await computeRequiredPaymentAmount(
                       api3Market,
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                      dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                      dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                      dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                     ),
                   }
                 )
@@ -2563,28 +2598,28 @@ describe('Api3Market', function () {
               api3Market
                 .connect(roles.randomPerson)
                 .buySubscription(
-                  dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                  dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof.slice(1)]
+                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof!.slice(1)]
                   ),
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
                   ),
                   {
                     value: await computeRequiredPaymentAmount(
                       api3Market,
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                      dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                      dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                      dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                     ),
                   }
                 )
@@ -2607,28 +2642,28 @@ describe('Api3Market', function () {
               api3Market
                 .connect(roles.randomPerson)
                 .buySubscription(
-                  dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                  dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                   ),
                   '0x',
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
                   ),
                   {
                     value: await computeRequiredPaymentAmount(
                       api3Market,
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                      dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                      dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                      dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                     ),
                   }
                 )
@@ -2649,28 +2684,28 @@ describe('Api3Market', function () {
               api3Market
                 .connect(roles.randomPerson)
                 .buySubscription(
-                  dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                  dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                   ),
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
                   0,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
                   ),
                   {
                     value: await computeRequiredPaymentAmount(
                       api3Market,
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                      dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                      dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                      dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                     ),
                   }
                 )
@@ -2691,28 +2726,28 @@ describe('Api3Market', function () {
               api3Market
                 .connect(roles.randomPerson)
                 .buySubscription(
-                  dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                  dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                   ),
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
                   0,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+                    [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
                   ),
                   {
                     value: await computeRequiredPaymentAmount(
                       api3Market,
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                      dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                      dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                      dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                     ),
                   }
                 )
@@ -2727,25 +2762,25 @@ describe('Api3Market', function () {
               api3Market
                 .connect(roles.randomPerson)
                 .buySubscription(
-                  dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                  dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                   ),
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                   '0x',
                   {
                     value: await computeRequiredPaymentAmount(
                       api3Market,
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                      dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                      dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                      dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                     ),
                   }
                 )
@@ -2760,28 +2795,28 @@ describe('Api3Market', function () {
               api3Market
                 .connect(roles.randomPerson)
                 .buySubscription(
-                  dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                  dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                   ),
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [ethers.ZeroHash, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+                    [ethers.ZeroHash, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
                   ),
                   {
                     value: await computeRequiredPaymentAmount(
                       api3Market,
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                      dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                      dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                      dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                     ),
                   }
                 )
@@ -2802,31 +2837,31 @@ describe('Api3Market', function () {
               api3Market
                 .connect(roles.randomPerson)
                 .buySubscription(
-                  dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                  dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                   ),
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
                     [
                       dapiPricingMerkleRoot,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof.slice(1),
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof!.slice(1),
                     ]
                   ),
                   {
                     value: await computeRequiredPaymentAmount(
                       api3Market,
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                      dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                      dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                      dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                      dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                     ),
                   }
                 )
@@ -2858,56 +2893,56 @@ describe('Api3Market', function () {
             await api3Market
               .connect(roles.randomPerson)
               .buySubscription(
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                 ),
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
                 ),
                 {
                   value: await computeRequiredPaymentAmount(
                     api3Market,
-                    dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                    dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                    dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                    dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                   ),
                 }
               );
             await api3Market
               .connect(roles.randomPerson)
               .buySubscription(
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                 ),
-                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof]
+                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.proof]
                 ),
                 {
                   value: await computeRequiredPaymentAmount(
                     api3Market,
-                    dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                    dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                    dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                    dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
-                    dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                    dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                    dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                    dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                    dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
+                    dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                   ),
                 }
               );
@@ -2916,47 +2951,47 @@ describe('Api3Market', function () {
             await api3Market
               .connect(roles.randomPerson)
               .buySubscription(
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                 ),
-                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
-                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
+                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters,
+                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
+                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.proof]
+                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.proof]
                 ),
                 {
                   value: await computeRequiredPaymentAmount(
                     api3Market,
-                    dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                    dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
-                    dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-                    dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
-                    dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                    dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                    dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters,
+                    dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
+                    dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price,
+                    dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                   ),
                 }
               );
             await helpers.time.setNextBlockTimestamp(
               subscriptionTimestamp3 +
-                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration
+                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration
             );
             await expect(
               api3Market
                 .connect(roles.randomPerson)
-                .updateCurrentSubscriptionId(dapiManagementMerkleLeaves.ethUsd.values.dapiName)
+                .updateCurrentSubscriptionId(dapiManagementMerkleLeaves.ethUsd!.values.dapiName)
             )
               .to.emit(api3Market, 'UpdatedCurrentSubscriptionId')
-              .withArgs(dapiManagementMerkleLeaves.ethUsd.values.dapiName, ethers.ZeroHash)
+              .withArgs(dapiManagementMerkleLeaves.ethUsd!.values.dapiName, ethers.ZeroHash)
               .to.emit(airseekerRegistry, 'DeactivatedDapiName')
-              .withArgs(dapiManagementMerkleLeaves.ethUsd.values.dapiName);
-            const dataFeedReading = await api3ServerV1.dataFeeds(dapiManagementMerkleLeaves.ethUsd.values.dataFeedId);
+              .withArgs(dapiManagementMerkleLeaves.ethUsd!.values.dapiName);
+            const dataFeedReading = await api3ServerV1.dataFeeds(dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId);
             const beaconReadings = await readBeacons(api3ServerV1, beaconIds);
-            const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd.values.dapiName);
+            const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd!.values.dapiName);
             expect(dapiData.dataFeedDetails).to.equal(dataFeedDetails);
             expect(dapiData.dapiValue).to.equal(dataFeedReading.value);
             expect(dapiData.dapiTimestamp).to.equal(dataFeedReading.timestamp);
@@ -2989,28 +3024,28 @@ describe('Api3Market', function () {
             await api3Market
               .connect(roles.randomPerson)
               .buySubscription(
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                 ),
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
                 ),
                 {
                   value: await computeRequiredPaymentAmount(
                     api3Market,
-                    dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                    dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                    dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                    dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                    dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                   ),
                 }
               );
@@ -3019,28 +3054,28 @@ describe('Api3Market', function () {
             await api3Market
               .connect(roles.randomPerson)
               .buySubscription(
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                 ),
-                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof]
+                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.proof]
                 ),
                 {
                   value: await computeRequiredPaymentAmount(
                     api3Market,
-                    dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                    dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                    dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                    dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
-                    dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                    dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                    dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                    dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                    dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
+                    dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                   ),
                 }
               );
@@ -3049,56 +3084,56 @@ describe('Api3Market', function () {
             await api3Market
               .connect(roles.randomPerson)
               .buySubscription(
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                 ),
-                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
-                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
+                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters,
+                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
+                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.proof]
+                  [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.proof]
                 ),
                 {
                   value: await computeRequiredPaymentAmount(
                     api3Market,
-                    dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                    dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
-                    dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-                    dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
-                    dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                    dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                    dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters,
+                    dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
+                    dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price,
+                    dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                   ),
                 }
               );
             await helpers.time.setNextBlockTimestamp(
-              subscriptionTimestamp1 + dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration
+              subscriptionTimestamp1 + dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration
             );
             await expect(
               api3Market
                 .connect(roles.randomPerson)
-                .updateCurrentSubscriptionId(dapiManagementMerkleLeaves.ethUsd.values.dapiName)
+                .updateCurrentSubscriptionId(dapiManagementMerkleLeaves.ethUsd!.values.dapiName)
             )
               .to.emit(api3Market, 'UpdatedCurrentSubscriptionId')
               .withArgs(
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
                 computeSubscriptionId(
-                  dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                  dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters
+                  dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                  dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters
                 )
               )
               .to.emit(airseekerRegistry, 'UpdatedDapiNameUpdateParameters')
               .withArgs(
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters
               );
 
-            const dataFeedReading = await api3ServerV1.dataFeeds(dapiManagementMerkleLeaves.ethUsd.values.dataFeedId);
+            const dataFeedReading = await api3ServerV1.dataFeeds(dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId);
             const beaconReadings = await readBeacons(api3ServerV1, beaconIds);
-            const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd.values.dapiName);
+            const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd!.values.dapiName);
             expect(dapiData.dataFeedDetails).to.equal(dataFeedDetails);
             expect(dapiData.dapiValue).to.equal(dataFeedReading.value);
             expect(dapiData.dapiTimestamp).to.equal(dataFeedReading.timestamp);
@@ -3107,21 +3142,22 @@ describe('Api3Market', function () {
               beaconReadings.map((beaconReading) => beaconReading.timestamp)
             );
             expect(dapiData.updateParameters).to.deep.equal([
-              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-              dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
+              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+              dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters,
             ]);
             expect(dapiData.endTimestamps).to.deep.equal([
-              subscriptionTimestamp2 + dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
+              subscriptionTimestamp2 +
+                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
               subscriptionTimestamp3 +
-                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
+                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
             ]);
             expect(dapiData.dailyPrices).to.deep.equal([
-              (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price) *
+              (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price) *
                 BigInt(24 * 60 * 60)) /
-                BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration),
-              (BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price) *
+                BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration),
+              (BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price) *
                 BigInt(24 * 60 * 60)) /
-                BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration),
+                BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration),
             ]);
           });
         });
@@ -3141,35 +3177,35 @@ describe('Api3Market', function () {
           await api3Market
             .connect(roles.randomPerson)
             .buySubscription(
-              dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-              dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-              dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+              dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+              dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+              dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
               ethers.AbiCoder.defaultAbiCoder().encode(
                 ['bytes32', 'bytes32[]'],
-                [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
               ),
-              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
               ethers.AbiCoder.defaultAbiCoder().encode(
                 ['bytes32', 'bytes32[]'],
-                [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+                [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
               ),
               {
                 value: await computeRequiredPaymentAmount(
                   api3Market,
-                  dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                  dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                  dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                  dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                  dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
                 ),
               }
             );
           await expect(
             api3Market
               .connect(roles.randomPerson)
-              .updateCurrentSubscriptionId(dapiManagementMerkleLeaves.ethUsd.values.dapiName)
+              .updateCurrentSubscriptionId(dapiManagementMerkleLeaves.ethUsd!.values.dapiName)
           ).to.be.revertedWith('Current subscription not ended');
         });
       });
@@ -3180,7 +3216,7 @@ describe('Api3Market', function () {
         await expect(
           api3Market
             .connect(roles.randomPerson)
-            .updateCurrentSubscriptionId(dapiManagementMerkleLeaves.ethUsd.values.dapiName)
+            .updateCurrentSubscriptionId(dapiManagementMerkleLeaves.ethUsd!.values.dapiName)
         ).to.be.revertedWith('Subscription queue empty');
       });
     });
@@ -3205,19 +3241,19 @@ describe('Api3Market', function () {
                 api3Market
                   .connect(roles.randomPerson)
                   .updateDapiName(
-                    dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                    dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                    dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                    dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                    dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                    dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                     ethers.AbiCoder.defaultAbiCoder().encode(
                       ['bytes32', 'bytes32[]'],
-                      [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                      [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                     )
                   )
               )
                 .to.emit(api3ServerV1, 'SetDapiName')
                 .withArgs(
-                  dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
                   await api3Market.getAddress()
                 );
             });
@@ -3235,7 +3271,7 @@ describe('Api3Market', function () {
                 } = await helpers.loadFixture(deploy);
                 await api3Market.connect(roles.randomPerson).registerDataFeed(dataFeedDetails);
                 const dataFeedReading = await api3ServerV1.dataFeeds(
-                  dapiManagementMerkleLeaves.ethUsd.values.dataFeedId
+                  dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId
                 );
                 await helpers.time.setNextBlockTimestamp(
                   dataFeedReading.timestamp + BigInt(MAXIMUM_DAPI_UPDATE_AGE + 1)
@@ -3244,12 +3280,12 @@ describe('Api3Market', function () {
                   api3Market
                     .connect(roles.randomPerson)
                     .updateDapiName(
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                      dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                      dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                      dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                      dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                       ethers.AbiCoder.defaultAbiCoder().encode(
                         ['bytes32', 'bytes32[]'],
-                        [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                        [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                       )
                     )
                 ).to.be.revertedWith('Data feed value stale');
@@ -3263,12 +3299,12 @@ describe('Api3Market', function () {
                   api3Market
                     .connect(roles.randomPerson)
                     .updateDapiName(
-                      dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                      dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                      dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                      dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                      dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                      dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                       ethers.AbiCoder.defaultAbiCoder().encode(
                         ['bytes32', 'bytes32[]'],
-                        [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                        [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                       )
                     )
                 ).to.be.revertedWith('Data feed not registered');
@@ -3290,35 +3326,35 @@ describe('Api3Market', function () {
             await api3Market
               .connect(roles.randomPerson)
               .updateDapiName(
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                 )
               );
             await expect(
               api3Market
                 .connect(roles.randomPerson)
                 .updateDapiName(
-                  dapiManagementMerkleLeaves.ethUsdWithZeroDataFeedIdAndSponsorWalletAddress.values.dapiName,
-                  dapiManagementMerkleLeaves.ethUsdWithZeroDataFeedIdAndSponsorWalletAddress.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsdWithZeroDataFeedIdAndSponsorWalletAddress.values
+                  dapiManagementMerkleLeaves.ethUsdWithZeroDataFeedIdAndSponsorWalletAddress!.values.dapiName,
+                  dapiManagementMerkleLeaves.ethUsdWithZeroDataFeedIdAndSponsorWalletAddress!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsdWithZeroDataFeedIdAndSponsorWalletAddress!.values
                     .sponsorWalletAddress,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
                     [
                       dapiManagementMerkleRoot,
-                      dapiManagementMerkleLeaves.ethUsdWithZeroDataFeedIdAndSponsorWalletAddress.proof,
+                      dapiManagementMerkleLeaves.ethUsdWithZeroDataFeedIdAndSponsorWalletAddress!.proof,
                     ]
                   )
                 )
             )
               .to.emit(api3ServerV1, 'SetDapiName')
               .withArgs(
-                dapiManagementMerkleLeaves.ethUsdWithZeroDataFeedIdAndSponsorWalletAddress.values.dataFeedId,
-                dapiManagementMerkleLeaves.ethUsdWithZeroDataFeedIdAndSponsorWalletAddress.values.dapiName,
+                dapiManagementMerkleLeaves.ethUsdWithZeroDataFeedIdAndSponsorWalletAddress!.values.dataFeedId,
+                dapiManagementMerkleLeaves.ethUsdWithZeroDataFeedIdAndSponsorWalletAddress!.values.dapiName,
                 await api3Market.getAddress()
               );
           });
@@ -3332,24 +3368,24 @@ describe('Api3Market', function () {
           await api3Market
             .connect(roles.randomPerson)
             .updateDapiName(
-              dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-              dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-              dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+              dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+              dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+              dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
               ethers.AbiCoder.defaultAbiCoder().encode(
                 ['bytes32', 'bytes32[]'],
-                [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
               )
             );
           await expect(
             api3Market
               .connect(roles.randomPerson)
               .updateDapiName(
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                 )
               )
           ).to.be.revertedWith('Does not update dAPI name');
@@ -3365,12 +3401,12 @@ describe('Api3Market', function () {
             api3Market
               .connect(roles.randomPerson)
               .updateDapiName(
-                dapiManagementMerkleLeaves.ethUsdWithZeroSponsorWalletAddress.values.dapiName,
-                dapiManagementMerkleLeaves.ethUsdWithZeroSponsorWalletAddress.values.dataFeedId,
-                dapiManagementMerkleLeaves.ethUsdWithZeroSponsorWalletAddress.values.sponsorWalletAddress,
+                dapiManagementMerkleLeaves.ethUsdWithZeroSponsorWalletAddress!.values.dapiName,
+                dapiManagementMerkleLeaves.ethUsdWithZeroSponsorWalletAddress!.values.dataFeedId,
+                dapiManagementMerkleLeaves.ethUsdWithZeroSponsorWalletAddress!.values.sponsorWalletAddress,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsdWithZeroSponsorWalletAddress.proof]
+                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsdWithZeroSponsorWalletAddress!.proof]
                 )
               )
           ).to.be.revertedWith('Sponsor wallet address zero');
@@ -3384,12 +3420,12 @@ describe('Api3Market', function () {
             api3Market
               .connect(roles.randomPerson)
               .updateDapiName(
-                dapiManagementMerkleLeaves.ethUsdWithZeroDataFeedId.values.dapiName,
-                dapiManagementMerkleLeaves.ethUsdWithZeroDataFeedId.values.dataFeedId,
-                dapiManagementMerkleLeaves.ethUsdWithZeroDataFeedId.values.sponsorWalletAddress,
+                dapiManagementMerkleLeaves.ethUsdWithZeroDataFeedId!.values.dapiName,
+                dapiManagementMerkleLeaves.ethUsdWithZeroDataFeedId!.values.dataFeedId,
+                dapiManagementMerkleLeaves.ethUsdWithZeroDataFeedId!.values.sponsorWalletAddress,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsdWithZeroDataFeedId.proof]
+                  [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsdWithZeroDataFeedId!.proof]
                 )
               )
           ).to.be.revertedWith('Sponsor wallet address not zero');
@@ -3405,11 +3441,11 @@ describe('Api3Market', function () {
                 .connect(roles.randomPerson)
                 .updateDapiName(
                   ethers.ZeroHash,
-                  dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
                   )
                 )
             ).to.be.revertedWith('dAPI name zero');
@@ -3422,9 +3458,9 @@ describe('Api3Market', function () {
               api3Market
                 .connect(roles.randomPerson)
                 .updateDapiName(
-                  dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                  dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                   '0x'
                 )
             ).to.be.revertedWithoutReason();
@@ -3437,12 +3473,12 @@ describe('Api3Market', function () {
               api3Market
                 .connect(roles.randomPerson)
                 .updateDapiName(
-                  dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                  dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [ethers.ZeroHash, dapiManagementMerkleLeaves.ethUsd.proof]
+                    [ethers.ZeroHash, dapiManagementMerkleLeaves.ethUsd!.proof]
                   )
                 )
             ).to.be.revertedWith('Invalid root');
@@ -3456,12 +3492,12 @@ describe('Api3Market', function () {
               api3Market
                 .connect(roles.randomPerson)
                 .updateDapiName(
-                  dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                  dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-                  dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                  dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+                  dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
                   ethers.AbiCoder.defaultAbiCoder().encode(
                     ['bytes32', 'bytes32[]'],
-                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof.slice(1)]
+                    [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof!.slice(1)]
                   )
                 )
             ).to.be.revertedWith('Invalid proof');
@@ -3481,18 +3517,18 @@ describe('Api3Market', function () {
             api3Market
               .connect(roles.randomPerson)
               .updateSignedApiUrl(
-                signedApiUrlMerkleLeaves[airnodes[0].address].values.airnodeAddress,
-                signedApiUrlMerkleLeaves[airnodes[0].address].values.signedApiUrl,
+                signedApiUrlMerkleLeaves[airnodes[0]!.address]!.values.airnodeAddress,
+                signedApiUrlMerkleLeaves[airnodes[0]!.address]!.values.signedApiUrl,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [signedApiUrlMerkleRoot, signedApiUrlMerkleLeaves[airnodes[0].address].proof]
+                  [signedApiUrlMerkleRoot, signedApiUrlMerkleLeaves[airnodes[0]!.address]!.proof]
                 )
               )
           )
             .to.emit(airseekerRegistry, 'UpdatedSignedApiUrl')
             .withArgs(
-              signedApiUrlMerkleLeaves[airnodes[0].address].values.airnodeAddress,
-              signedApiUrlMerkleLeaves[airnodes[0].address].values.signedApiUrl
+              signedApiUrlMerkleLeaves[airnodes[0]!.address]!.values.airnodeAddress,
+              signedApiUrlMerkleLeaves[airnodes[0]!.address]!.values.signedApiUrl
             );
         });
       });
@@ -3503,22 +3539,22 @@ describe('Api3Market', function () {
           await api3Market
             .connect(roles.randomPerson)
             .updateSignedApiUrl(
-              signedApiUrlMerkleLeaves[airnodes[0].address].values.airnodeAddress,
-              signedApiUrlMerkleLeaves[airnodes[0].address].values.signedApiUrl,
+              signedApiUrlMerkleLeaves[airnodes[0]!.address]!.values.airnodeAddress,
+              signedApiUrlMerkleLeaves[airnodes[0]!.address]!.values.signedApiUrl,
               ethers.AbiCoder.defaultAbiCoder().encode(
                 ['bytes32', 'bytes32[]'],
-                [signedApiUrlMerkleRoot, signedApiUrlMerkleLeaves[airnodes[0].address].proof]
+                [signedApiUrlMerkleRoot, signedApiUrlMerkleLeaves[airnodes[0]!.address]!.proof]
               )
             );
           await expect(
             api3Market
               .connect(roles.randomPerson)
               .updateSignedApiUrl(
-                signedApiUrlMerkleLeaves[airnodes[0].address].values.airnodeAddress,
-                signedApiUrlMerkleLeaves[airnodes[0].address].values.signedApiUrl,
+                signedApiUrlMerkleLeaves[airnodes[0]!.address]!.values.airnodeAddress,
+                signedApiUrlMerkleLeaves[airnodes[0]!.address]!.values.signedApiUrl,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [signedApiUrlMerkleRoot, signedApiUrlMerkleLeaves[airnodes[0].address].proof]
+                  [signedApiUrlMerkleRoot, signedApiUrlMerkleLeaves[airnodes[0]!.address]!.proof]
                 )
               )
           ).to.be.revertedWith('Does not update signed API URL');
@@ -3533,8 +3569,8 @@ describe('Api3Market', function () {
             api3Market
               .connect(roles.randomPerson)
               .updateSignedApiUrl(
-                signedApiUrlMerkleLeaves[airnodes[0].address].values.airnodeAddress,
-                signedApiUrlMerkleLeaves[airnodes[0].address].values.signedApiUrl,
+                signedApiUrlMerkleLeaves[airnodes[0]!.address]!.values.airnodeAddress,
+                signedApiUrlMerkleLeaves[airnodes[0]!.address]!.values.signedApiUrl,
                 '0x'
               )
           ).to.be.revertedWithoutReason();
@@ -3547,11 +3583,11 @@ describe('Api3Market', function () {
             api3Market
               .connect(roles.randomPerson)
               .updateSignedApiUrl(
-                signedApiUrlMerkleLeaves[airnodes[0].address].values.airnodeAddress,
-                signedApiUrlMerkleLeaves[airnodes[0].address].values.signedApiUrl,
+                signedApiUrlMerkleLeaves[airnodes[0]!.address]!.values.airnodeAddress,
+                signedApiUrlMerkleLeaves[airnodes[0]!.address]!.values.signedApiUrl,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [ethers.ZeroHash, signedApiUrlMerkleLeaves[airnodes[0].address].proof]
+                  [ethers.ZeroHash, signedApiUrlMerkleLeaves[airnodes[0]!.address]!.proof]
                 )
               )
           ).to.be.revertedWith('Invalid root');
@@ -3565,11 +3601,11 @@ describe('Api3Market', function () {
             api3Market
               .connect(roles.randomPerson)
               .updateSignedApiUrl(
-                signedApiUrlMerkleLeaves[airnodes[0].address].values.airnodeAddress,
-                signedApiUrlMerkleLeaves[airnodes[0].address].values.signedApiUrl,
+                signedApiUrlMerkleLeaves[airnodes[0]!.address]!.values.airnodeAddress,
+                signedApiUrlMerkleLeaves[airnodes[0]!.address]!.values.signedApiUrl,
                 ethers.AbiCoder.defaultAbiCoder().encode(
                   ['bytes32', 'bytes32[]'],
-                  [signedApiUrlMerkleRoot, signedApiUrlMerkleLeaves[airnodes[0].address].proof.slice(1)]
+                  [signedApiUrlMerkleRoot, signedApiUrlMerkleLeaves[airnodes[0]!.address]!.proof!.slice(1)]
                 )
               )
           ).to.be.revertedWith('Invalid proof');
@@ -3583,7 +3619,7 @@ describe('Api3Market', function () {
       const { roles, airnodes, api3ServerV1, templateIds, beaconIds, api3Market } = await helpers.loadFixture(deploy);
       const timestamp = await helpers.time.latest();
       const encodedValue = ethers.AbiCoder.defaultAbiCoder().encode(['int224'], [123]);
-      const signature = await airnodes[0].signMessage(
+      const signature = await airnodes[0]!.signMessage(
         ethers.toBeArray(
           ethers.solidityPackedKeccak256(['bytes32', 'uint256', 'bytes'], [templateIds[0], timestamp, encodedValue])
         )
@@ -3591,7 +3627,7 @@ describe('Api3Market', function () {
       await expect(
         api3Market
           .connect(roles.randomPerson)
-          .updateBeaconWithSignedData(airnodes[0].address, templateIds[0], timestamp, encodedValue, signature)
+          .updateBeaconWithSignedData(airnodes[0]!.address, templateIds[0]!, timestamp, encodedValue, signature)
       )
         .to.emit(api3ServerV1, 'UpdatedBeaconWithSignedData')
         .withArgs(beaconIds[0], encodedValue, timestamp);
@@ -3602,12 +3638,12 @@ describe('Api3Market', function () {
     it('updates Beacon set with Beacons', async function () {
       const { roles, api3ServerV1, beaconIds, api3Market } = await helpers.loadFixture(deploy);
       const beaconReadings = await readBeacons(api3ServerV1, beaconIds);
-      await expect(api3Market.connect(roles.randomPerson).updateBeaconSetWithBeacons([beaconIds[0], beaconIds[1]]))
+      await expect(api3Market.connect(roles.randomPerson).updateBeaconSetWithBeacons([beaconIds[0]!, beaconIds[1]!]))
         .to.emit(api3ServerV1, 'UpdatedBeaconSetWithBeacons')
         .withArgs(
           ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(['bytes32[]'], [[beaconIds[0], beaconIds[1]]])),
-          (beaconReadings[0].value + beaconReadings[1].value) / BigInt(2),
-          (BigInt(beaconReadings[0].timestamp) + BigInt(beaconReadings[1].timestamp)) / BigInt(2)
+          (beaconReadings[0]!.value + beaconReadings[1]!.value) / BigInt(2),
+          (BigInt(beaconReadings[0]!.timestamp) + BigInt(beaconReadings[1]!.timestamp)) / BigInt(2)
         );
     });
   });
@@ -3627,13 +3663,13 @@ describe('Api3Market', function () {
       await expect(
         api3Market
           .connect(roles.randomPerson)
-          .deployDapiProxyWithOev(dapiName, roles.randomPerson.address, '0x12345678')
+          .deployDapiProxyWithOev(dapiName, roles.randomPerson!.address, '0x12345678')
       )
         .to.emit(proxyFactory, 'DeployedDapiProxyWithOev')
         .withArgs(
-          await proxyFactory.computeDapiProxyWithOevAddress(dapiName, roles.randomPerson.address, '0x12345678'),
+          await proxyFactory.computeDapiProxyWithOevAddress(dapiName, roles.randomPerson!.address, '0x12345678'),
           dapiName,
-          roles.randomPerson.address,
+          roles.randomPerson!.address,
           '0x12345678'
         );
     });
@@ -3665,28 +3701,28 @@ describe('Api3Market', function () {
       await api3Market
         .connect(roles.randomPerson)
         .buySubscription(
-          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+          dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+          dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
           ethers.AbiCoder.defaultAbiCoder().encode(
             ['bytes32', 'bytes32[]'],
-            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
           ),
-          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
           ethers.AbiCoder.defaultAbiCoder().encode(
             ['bytes32', 'bytes32[]'],
-            [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+            [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
           ),
           {
             value: await computeRequiredPaymentAmount(
               api3Market,
-              dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-              dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+              dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+              dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
             ),
           }
         );
@@ -3696,28 +3732,28 @@ describe('Api3Market', function () {
       await api3Market
         .connect(roles.randomPerson)
         .buySubscription(
-          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+          dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+          dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
           ethers.AbiCoder.defaultAbiCoder().encode(
             ['bytes32', 'bytes32[]'],
-            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
           ),
-          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
           ethers.AbiCoder.defaultAbiCoder().encode(
             ['bytes32', 'bytes32[]'],
-            [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof]
+            [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.proof]
           ),
           {
             value: await computeRequiredPaymentAmount(
               api3Market,
-              dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
-              dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+              dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+              dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
+              dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
             ),
           }
         );
@@ -3726,60 +3762,61 @@ describe('Api3Market', function () {
       await api3Market
         .connect(roles.randomPerson)
         .buySubscription(
-          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-          dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-          dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+          dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+          dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
           ethers.AbiCoder.defaultAbiCoder().encode(
             ['bytes32', 'bytes32[]'],
-            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+            [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
           ),
-          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
-          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
+          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters,
+          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
+          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price,
           ethers.AbiCoder.defaultAbiCoder().encode(
             ['bytes32', 'bytes32[]'],
-            [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.proof]
+            [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.proof]
           ),
           {
             value: await computeRequiredPaymentAmount(
               api3Market,
-              dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-              dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
-              dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-              dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
-              dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+              dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+              dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters,
+              dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
+              dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price,
+              dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
             ),
           }
         );
       const currentTimestamp = Math.floor(
         subscriptionTimestamp1 +
-          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration +
-          (dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration -
-            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration) /
+          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration +
+          (dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration -
+            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration) /
             2
       );
       await helpers.time.increaseTo(currentTimestamp);
       const subscription2EndTimestamp =
-        subscriptionTimestamp2 + dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration;
+        subscriptionTimestamp2 + dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration;
       const subscription2DailyPrice =
-        (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price) * BigInt(24 * 60 * 60)) /
-        BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration);
+        (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price) *
+          BigInt(24 * 60 * 60)) /
+        BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration);
       const expectedSponsorWalletBalanceFromSubscription2 =
         ((BigInt(subscription2EndTimestamp) - BigInt(currentTimestamp)) * BigInt(subscription2DailyPrice)) /
         BigInt(24 * 60 * 60);
       const subscription3EndTimestamp =
-        subscriptionTimestamp3 + dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration;
+        subscriptionTimestamp3 + dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration;
       const subscription3DailyPrice =
-        (BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price) *
+        (BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price) *
           BigInt(24 * 60 * 60)) /
-        BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration);
+        BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration);
       const expectedSponsorWalletBalanceFromSubscription3 =
         ((BigInt(subscription3EndTimestamp) - BigInt(subscription2EndTimestamp)) * BigInt(subscription3DailyPrice)) /
         BigInt(24 * 60 * 60);
       const expectedSponsorWalletBalance =
         BigInt(expectedSponsorWalletBalanceFromSubscription2) + BigInt(expectedSponsorWalletBalanceFromSubscription3);
       expect(
-        await api3Market.computeExpectedSponsorWalletBalance(dapiManagementMerkleLeaves.ethUsd.values.dapiName)
+        await api3Market.computeExpectedSponsorWalletBalance(dapiManagementMerkleLeaves.ethUsd!.values.dapiName)
       ).to.equal(expectedSponsorWalletBalance);
     });
   });
@@ -3802,28 +3839,28 @@ describe('Api3Market', function () {
         await api3Market
           .connect(roles.randomPerson)
           .buySubscription(
-            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+            dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+            dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+            dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
             ethers.AbiCoder.defaultAbiCoder().encode(
               ['bytes32', 'bytes32[]'],
-              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
             ),
-            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
             ethers.AbiCoder.defaultAbiCoder().encode(
               ['bytes32', 'bytes32[]'],
-              [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+              [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
             ),
             {
               value: await computeRequiredPaymentAmount(
                 api3Market,
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
               ),
             }
           );
@@ -3833,54 +3870,54 @@ describe('Api3Market', function () {
         await api3Market
           .connect(roles.randomPerson)
           .buySubscription(
-            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+            dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+            dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+            dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
             ethers.AbiCoder.defaultAbiCoder().encode(
               ['bytes32', 'bytes32[]'],
-              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
             ),
-            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
             ethers.AbiCoder.defaultAbiCoder().encode(
               ['bytes32', 'bytes32[]'],
-              [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof]
+              [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.proof]
             ),
             {
               value: await computeRequiredPaymentAmount(
                 api3Market,
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
               ),
             }
           );
         const currentTimestamp = Math.floor(
           subscriptionTimestamp1 +
-            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration +
-            (dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration -
-              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration) /
+            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration +
+            (dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration -
+              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration) /
               2
         );
         await helpers.time.increaseTo(currentTimestamp);
         const subscription2EndTimestamp =
-          subscriptionTimestamp2 + dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration;
+          subscriptionTimestamp2 + dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration;
         const subscription2DailyPrice =
-          (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price) *
+          (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price) *
             BigInt(24 * 60 * 60)) /
-          BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration);
+          BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration);
         const expectedSponsorWalletBalanceFromSubscription2 =
           ((BigInt(subscription2EndTimestamp) - BigInt(currentTimestamp)) * BigInt(subscription2DailyPrice)) /
           BigInt(24 * 60 * 60);
         const subscription3EndTimestamp =
-          currentTimestamp + dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration;
+          currentTimestamp + dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration;
         const subscription3DailyPrice =
-          (BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price) *
+          (BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price) *
             BigInt(24 * 60 * 60)) /
-          BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration);
+          BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration);
         const expectedSponsorWalletBalanceFromSubscription3 =
           ((BigInt(subscription3EndTimestamp) - BigInt(subscription2EndTimestamp)) * BigInt(subscription3DailyPrice)) /
           BigInt(24 * 60 * 60);
@@ -3888,10 +3925,10 @@ describe('Api3Market', function () {
           expectedSponsorWalletBalanceFromSubscription2 + expectedSponsorWalletBalanceFromSubscription3;
         expect(
           await api3Market.computeExpectedSponsorWalletBalanceAfterSubscriptionIsAdded(
-            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
-            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price
+            dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters,
+            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
+            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price
           )
         ).to.equal(expectedSponsorWalletBalanceAfterSubscriptionIsAdded);
       });
@@ -3913,73 +3950,73 @@ describe('Api3Market', function () {
         await api3Market
           .connect(roles.randomPerson)
           .buySubscription(
-            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+            dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+            dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+            dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
             ethers.AbiCoder.defaultAbiCoder().encode(
               ['bytes32', 'bytes32[]'],
-              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
             ),
-            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
             ethers.AbiCoder.defaultAbiCoder().encode(
               ['bytes32', 'bytes32[]'],
-              [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+              [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
             ),
             {
               value: await computeRequiredPaymentAmount(
                 api3Market,
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
               ),
             }
           );
         await api3Market
           .connect(roles.randomPerson)
           .buySubscription(
-            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+            dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+            dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+            dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
             ethers.AbiCoder.defaultAbiCoder().encode(
               ['bytes32', 'bytes32[]'],
-              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
             ),
-            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
             ethers.AbiCoder.defaultAbiCoder().encode(
               ['bytes32', 'bytes32[]'],
-              [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof]
+              [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.proof]
             ),
             {
               value: await computeRequiredPaymentAmount(
                 api3Market,
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
               ),
             }
           );
         const currentTimestamp = Math.floor(
           subscriptionTimestamp1 +
-            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration +
-            (dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration -
-              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration) /
+            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration +
+            (dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration -
+              dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration) /
               2
         );
         await helpers.time.increaseTo(currentTimestamp);
         await expect(
           api3Market.computeExpectedSponsorWalletBalanceAfterSubscriptionIsAdded(
-            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
+            dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
             '0x',
-            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price
+            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
+            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price
           )
         ).to.be.revertedWith('Update parameters length invalid');
       });
@@ -4006,28 +4043,28 @@ describe('Api3Market', function () {
         await api3Market
           .connect(roles.randomPerson)
           .buySubscription(
-            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+            dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+            dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+            dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
             ethers.AbiCoder.defaultAbiCoder().encode(
               ['bytes32', 'bytes32[]'],
-              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
             ),
-            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
             ethers.AbiCoder.defaultAbiCoder().encode(
               ['bytes32', 'bytes32[]'],
-              [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+              [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
             ),
             {
               value: await computeRequiredPaymentAmount(
                 api3Market,
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
               ),
             }
           );
@@ -4036,28 +4073,28 @@ describe('Api3Market', function () {
         await api3Market
           .connect(roles.randomPerson)
           .buySubscription(
-            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+            dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+            dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+            dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
             ethers.AbiCoder.defaultAbiCoder().encode(
               ['bytes32', 'bytes32[]'],
-              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
             ),
-            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
             ethers.AbiCoder.defaultAbiCoder().encode(
               ['bytes32', 'bytes32[]'],
-              [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof]
+              [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.proof]
             ),
             {
               value: await computeRequiredPaymentAmount(
                 api3Market,
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
               ),
             }
           );
@@ -4066,59 +4103,60 @@ describe('Api3Market', function () {
         await api3Market
           .connect(roles.randomPerson)
           .buySubscription(
-            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+            dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+            dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+            dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
             ethers.AbiCoder.defaultAbiCoder().encode(
               ['bytes32', 'bytes32[]'],
-              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
             ),
-            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
-            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
+            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters,
+            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
+            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price,
             ethers.AbiCoder.defaultAbiCoder().encode(
               ['bytes32', 'bytes32[]'],
-              [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.proof]
+              [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.proof]
             ),
             {
               value: await computeRequiredPaymentAmount(
                 api3Market,
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
-                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters,
+                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
+                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
               ),
             }
           );
-        const dataFeedReading = await api3ServerV1.dataFeeds(dapiManagementMerkleLeaves.ethUsd.values.dataFeedId);
+        const dataFeedReading = await api3ServerV1.dataFeeds(dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId);
         const beaconReadings = await readBeacons(api3ServerV1, beaconIds);
-        const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd.values.dapiName);
+        const dapiData = await api3Market.getDapiData(dapiManagementMerkleLeaves.ethUsd!.values.dapiName);
         expect(dapiData.dataFeedDetails).to.equal(dataFeedDetails);
         expect(dapiData.dapiValue).to.equal(dataFeedReading.value);
         expect(dapiData.dapiTimestamp).to.equal(dataFeedReading.timestamp);
         expect(dapiData.beaconValues).to.deep.equal(beaconReadings.map((beaconReading) => beaconReading.value));
         expect(dapiData.beaconTimestamps).to.deep.equal(beaconReadings.map((beaconReading) => beaconReading.timestamp));
         expect(dapiData.updateParameters).to.deep.equal([
-          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
+          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters,
         ]);
         expect(dapiData.endTimestamps).to.deep.equal([
-          subscriptionTimestamp1 + dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-          subscriptionTimestamp2 + dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-          subscriptionTimestamp3 + dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
+          subscriptionTimestamp1 + dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+          subscriptionTimestamp2 + dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+          subscriptionTimestamp3 +
+            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
         ]);
         expect(dapiData.dailyPrices).to.deep.equal([
-          (BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price) *
+          (BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price) *
             BigInt(24 * 60 * 60)) /
-            BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration),
-          (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price) *
+            BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration),
+          (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price) *
             BigInt(24 * 60 * 60)) /
-            BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration),
-          (BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price) *
+            BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration),
+          (BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price) *
             BigInt(24 * 60 * 60)) /
-            BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration),
+            BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration),
         ]);
       });
     });
@@ -4138,7 +4176,7 @@ describe('Api3Market', function () {
         } = await helpers.loadFixture(deploy);
         const beaconDataFeedDetails = ethers.AbiCoder.defaultAbiCoder().encode(
           ['address', 'bytes32'],
-          [airnodes[0].address, templateIds[0]]
+          [airnodes[0]!.address, templateIds[0]]
         );
         await api3Market.connect(roles.randomPerson).registerDataFeed(beaconDataFeedDetails);
         const subscriptionTimestamp1 = (await helpers.time.latest()) + 1;
@@ -4146,28 +4184,28 @@ describe('Api3Market', function () {
         await api3Market
           .connect(roles.randomPerson)
           .buySubscription(
-            dapiManagementMerkleLeaves.ethUsdWithASingleBeacon.values.dapiName,
-            dapiManagementMerkleLeaves.ethUsdWithASingleBeacon.values.dataFeedId,
-            dapiManagementMerkleLeaves.ethUsdWithASingleBeacon.values.sponsorWalletAddress,
+            dapiManagementMerkleLeaves.ethUsdWithASingleBeacon!.values.dapiName,
+            dapiManagementMerkleLeaves.ethUsdWithASingleBeacon!.values.dataFeedId,
+            dapiManagementMerkleLeaves.ethUsdWithASingleBeacon!.values.sponsorWalletAddress,
             ethers.AbiCoder.defaultAbiCoder().encode(
               ['bytes32', 'bytes32[]'],
-              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsdWithASingleBeacon.proof]
+              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsdWithASingleBeacon!.proof]
             ),
-            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
             ethers.AbiCoder.defaultAbiCoder().encode(
               ['bytes32', 'bytes32[]'],
-              [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+              [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
             ),
             {
               value: await computeRequiredPaymentAmount(
                 api3Market,
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
               ),
             }
           );
@@ -4177,28 +4215,28 @@ describe('Api3Market', function () {
         await api3Market
           .connect(roles.randomPerson)
           .buySubscription(
-            dapiManagementMerkleLeaves.ethUsdWithASingleBeacon.values.dapiName,
-            dapiManagementMerkleLeaves.ethUsdWithASingleBeacon.values.dataFeedId,
-            dapiManagementMerkleLeaves.ethUsdWithASingleBeacon.values.sponsorWalletAddress,
+            dapiManagementMerkleLeaves.ethUsdWithASingleBeacon!.values.dapiName,
+            dapiManagementMerkleLeaves.ethUsdWithASingleBeacon!.values.dataFeedId,
+            dapiManagementMerkleLeaves.ethUsdWithASingleBeacon!.values.sponsorWalletAddress,
             ethers.AbiCoder.defaultAbiCoder().encode(
               ['bytes32', 'bytes32[]'],
-              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsdWithASingleBeacon.proof]
+              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsdWithASingleBeacon!.proof]
             ),
-            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
+            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+            dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
             ethers.AbiCoder.defaultAbiCoder().encode(
               ['bytes32', 'bytes32[]'],
-              [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.proof]
+              [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.proof]
             ),
             {
               value: await computeRequiredPaymentAmount(
                 api3Market,
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+                dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
               ),
             }
           );
@@ -4207,37 +4245,37 @@ describe('Api3Market', function () {
         await api3Market
           .connect(roles.randomPerson)
           .buySubscription(
-            dapiManagementMerkleLeaves.ethUsdWithASingleBeacon.values.dapiName,
-            dapiManagementMerkleLeaves.ethUsdWithASingleBeacon.values.dataFeedId,
-            dapiManagementMerkleLeaves.ethUsdWithASingleBeacon.values.sponsorWalletAddress,
+            dapiManagementMerkleLeaves.ethUsdWithASingleBeacon!.values.dapiName,
+            dapiManagementMerkleLeaves.ethUsdWithASingleBeacon!.values.dataFeedId,
+            dapiManagementMerkleLeaves.ethUsdWithASingleBeacon!.values.sponsorWalletAddress,
             ethers.AbiCoder.defaultAbiCoder().encode(
               ['bytes32', 'bytes32[]'],
-              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsdWithASingleBeacon.proof]
+              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsdWithASingleBeacon!.proof]
             ),
-            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
-            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
+            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters,
+            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
+            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price,
             ethers.AbiCoder.defaultAbiCoder().encode(
               ['bytes32', 'bytes32[]'],
-              [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.proof]
+              [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.proof]
             ),
             {
               value: await computeRequiredPaymentAmount(
                 api3Market,
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
-                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
-                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters,
+                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
+                dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
               ),
             }
           );
         const dataFeedReading = await api3ServerV1.dataFeeds(
-          dapiManagementMerkleLeaves.ethUsdWithASingleBeacon.values.dataFeedId
+          dapiManagementMerkleLeaves.ethUsdWithASingleBeacon!.values.dataFeedId
         );
-        const beaconReadings = await readBeacons(api3ServerV1, [beaconIds[0]]);
+        const beaconReadings = await readBeacons(api3ServerV1, [beaconIds[0]!]);
         const dapiData = await api3Market.getDapiData(
-          dapiManagementMerkleLeaves.ethUsdWithASingleBeacon.values.dapiName
+          dapiManagementMerkleLeaves.ethUsdWithASingleBeacon!.values.dapiName
         );
         expect(dapiData.dataFeedDetails).to.equal(beaconDataFeedDetails);
         expect(dapiData.dapiValue).to.equal(dataFeedReading.value);
@@ -4245,25 +4283,26 @@ describe('Api3Market', function () {
         expect(dapiData.beaconValues).to.deep.equal(beaconReadings.map((beaconReading) => beaconReading.value));
         expect(dapiData.beaconTimestamps).to.deep.equal(beaconReadings.map((beaconReading) => beaconReading.timestamp));
         expect(dapiData.updateParameters).to.deep.equal([
-          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.updateParameters,
-          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.updateParameters,
+          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+          dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.updateParameters,
+          dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.updateParameters,
         ]);
         expect(dapiData.endTimestamps).to.deep.equal([
-          subscriptionTimestamp1 + dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-          subscriptionTimestamp2 + dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration,
-          subscriptionTimestamp3 + dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration,
+          subscriptionTimestamp1 + dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+          subscriptionTimestamp2 + dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration,
+          subscriptionTimestamp3 +
+            dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration,
         ]);
         expect(dapiData.dailyPrices).to.deep.equal([
-          (BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price) *
+          (BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price) *
             BigInt(24 * 60 * 60)) /
-            BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration),
-          (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.price) *
+            BigInt(dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration),
+          (BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.price) *
             BigInt(24 * 60 * 60)) /
-            BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths.values.duration),
-          (BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.price) *
+            BigInt(dapiPricingMerkleLeaves.twoPercentDeviationThresholdForTwoMonths!.values.duration),
+          (BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.price) *
             BigInt(24 * 60 * 60)) /
-            BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths.values.duration),
+            BigInt(dapiPricingMerkleLeaves.threePercentDeviationThresholdForThreeMonths!.values.duration),
         ]);
       });
     });
@@ -4283,39 +4322,39 @@ describe('Api3Market', function () {
         } = await helpers.loadFixture(deploy);
         await api3Market.connect(roles.randomPerson).registerDataFeed(dataFeedDetails);
         const subscriptionId = computeSubscriptionId(
-          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters
+          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters
         );
         await api3Market
           .connect(roles.randomPerson)
           .buySubscription(
-            dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-            dapiManagementMerkleLeaves.ethUsd.values.dataFeedId,
-            dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress,
+            dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+            dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId,
+            dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress,
             ethers.AbiCoder.defaultAbiCoder().encode(
               ['bytes32', 'bytes32[]'],
-              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd.proof]
+              [dapiManagementMerkleRoot, dapiManagementMerkleLeaves.ethUsd!.proof]
             ),
-            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
+            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+            dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
             ethers.AbiCoder.defaultAbiCoder().encode(
               ['bytes32', 'bytes32[]'],
-              [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.proof]
+              [dapiPricingMerkleRoot, dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.proof]
             ),
             {
               value: await computeRequiredPaymentAmount(
                 api3Market,
-                dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.duration,
-                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.price,
-                dapiManagementMerkleLeaves.ethUsd.values.sponsorWalletAddress
+                dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.duration,
+                dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.price,
+                dapiManagementMerkleLeaves.ethUsd!.values.sponsorWalletAddress
               ),
             }
           );
         expect(await api3Market.subscriptionIdToUpdateParameters(subscriptionId)).to.equal(
-          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters
+          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters
         );
       });
     });
@@ -4323,8 +4362,8 @@ describe('Api3Market', function () {
       it('returns empty bytes string', async function () {
         const { api3Market, dapiManagementMerkleLeaves, dapiPricingMerkleLeaves } = await helpers.loadFixture(deploy);
         const subscriptionId = computeSubscriptionId(
-          dapiManagementMerkleLeaves.ethUsd.values.dapiName,
-          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth.values.updateParameters
+          dapiManagementMerkleLeaves.ethUsd!.values.dapiName,
+          dapiPricingMerkleLeaves.onePercentDeviationThresholdForOneMonth!.values.updateParameters
         );
         expect(await api3Market.subscriptionIdToUpdateParameters(subscriptionId)).to.equal('0x');
       });

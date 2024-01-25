@@ -1,30 +1,42 @@
+import type { HardhatEthersSigner } from '@nomicfoundation/hardhat-ethers/signers';
 import * as helpers from '@nomicfoundation/hardhat-network-helpers';
 import { expect } from 'chai';
+import type { AddressLike, BigNumberish, BytesLike, HDNodeWallet } from 'ethers';
 import { ethers } from 'hardhat';
 
-export async function updateBeaconSet(api3ServerV1, feedName, airnodes, timestamp, value) {
+import type { AirseekerRegistry, Api3ServerV1 } from '../src/index';
+
+export async function updateBeaconSet(
+  api3ServerV1: Api3ServerV1,
+  feedName: string,
+  airnodes: HDNodeWallet[],
+  timestamp: BigNumberish,
+  value: BigNumberish
+) {
   const encodedValue = ethers.AbiCoder.defaultAbiCoder().encode(['int224'], [value]);
-  const beaconUpdateData = await Promise.all(
-    airnodes.map(async (airnode) => {
-      const templateId = deriveTemplateId(`OIS title of Airnode with address ${airnode.address}`, feedName);
-      return {
-        templateId,
-        beaconId: deriveBeaconId(airnode.address, templateId),
-        signature: await airnode.signMessage(
-          ethers.toBeArray(
-            ethers.solidityPackedKeccak256(['bytes32', 'uint256', 'bytes'], [templateId, timestamp, encodedValue])
-          )
-        ),
-      };
-    })
-  );
-  for (const [ind, airnode] of airnodes.entries()) {
+
+  const beaconUpdateData = airnodes.map((airnode) => {
+    const templateId = deriveTemplateId(`OIS title of Airnode with address ${airnode.address}`, feedName);
+    return {
+      airnode,
+      templateId,
+      beaconId: deriveBeaconId(airnode.address, templateId),
+    };
+  });
+  for (const beaconUpdateDatum of beaconUpdateData) {
     await api3ServerV1.updateBeaconWithSignedData(
-      airnode.address,
-      beaconUpdateData[ind].templateId,
+      beaconUpdateDatum.airnode.address,
+      beaconUpdateDatum.templateId,
       timestamp,
       encodedValue,
-      beaconUpdateData[ind].signature
+      await beaconUpdateDatum.airnode.signMessage(
+        ethers.toBeArray(
+          ethers.solidityPackedKeccak256(
+            ['bytes32', 'uint256', 'bytes'],
+            [beaconUpdateDatum.templateId, timestamp, encodedValue]
+          )
+        )
+      )
     );
   }
   const beaconIds = beaconUpdateData.map((beaconUpdateDatum) => beaconUpdateDatum.beaconId);
@@ -36,7 +48,7 @@ export async function updateBeaconSet(api3ServerV1, feedName, airnodes, timestam
   };
 }
 
-export async function readBeacons(api3ServerV1, beaconIds) {
+export async function readBeacons(api3ServerV1: Api3ServerV1, beaconIds: BytesLike[]) {
   const returndata = await api3ServerV1.multicall.staticCall(
     beaconIds.map((beaconId) => api3ServerV1.interface.encodeFunctionData('dataFeeds', [beaconId]))
   );
@@ -47,14 +59,18 @@ export async function readBeacons(api3ServerV1, beaconIds) {
     });
 }
 
-export function encodeUpdateParameters(deviationThreshold, deviationReference, heartbearInterval) {
+export function encodeUpdateParameters(
+  deviationThreshold: number,
+  deviationReference: number,
+  heartbeatInterval: number
+) {
   return ethers.AbiCoder.defaultAbiCoder().encode(
     ['uint256', 'int224', 'uint256'],
-    [deviationThreshold, deviationReference, heartbearInterval]
+    [deviationThreshold, deviationReference, heartbeatInterval]
   );
 }
 
-function deriveTemplateId(oisTitle, feedName) {
+function deriveTemplateId(oisTitle: string, feedName: string) {
   const endpointId = ethers.solidityPackedKeccak256(['string', 'string'], [oisTitle, 'feed']);
   // Parameters encoded in Airnode ABI
   // https://docs.api3.org/reference/airnode/latest/specifications/airnode-abi.html
@@ -70,15 +86,15 @@ function deriveTemplateId(oisTitle, feedName) {
   );
 }
 
-function deriveBeaconId(airnodeAddress, templateId) {
+function deriveBeaconId(airnodeAddress: AddressLike, templateId: BytesLike) {
   return ethers.solidityPackedKeccak256(['address', 'bytes32'], [airnodeAddress, templateId]);
 }
 
-function deriveBeaconSetId(beaconIds) {
+function deriveBeaconSetId(beaconIds: BytesLike[]) {
   return ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(['bytes32[]'], [beaconIds]));
 }
 
-async function registerBeaconSet(airseekerRegistry, feedName, airnodes) {
+async function registerBeaconSet(airseekerRegistry: AirseekerRegistry, feedName: string, airnodes: HDNodeWallet[]) {
   const beacons = airnodes
     .map((airnode) => {
       return {
@@ -105,10 +121,10 @@ describe('AirseekerRegistry', function () {
   async function deploy() {
     const roleNames = ['deployer', 'api3ServerV1Manager', 'owner', 'randomPerson'];
     const accounts = await ethers.getSigners();
-    const roles = roleNames.reduce((acc, roleName, index) => {
+    const roles: Record<string, HardhatEthersSigner> = roleNames.reduce((acc, roleName, index) => {
       return { ...acc, [roleName]: accounts[index] };
     }, {});
-    const airnodes = Array.from({ length: 3 }).map(() => ethers.Wallet.createRandom());
+    const airnodes: HDNodeWallet[] = Array.from({ length: 3 }).map(() => ethers.Wallet.createRandom());
 
     const AccessControlRegistry = await ethers.getContractFactory('AccessControlRegistry', roles.deployer);
     const accessControlRegistry = await AccessControlRegistry.deploy();
@@ -118,7 +134,7 @@ describe('AirseekerRegistry', function () {
     const api3ServerV1 = await Api3ServerV1.deploy(
       accessControlRegistry.getAddress(),
       api3ServerV1AdminRoleDescription,
-      roles.api3ServerV1Manager.address
+      roles.api3ServerV1Manager!.address
     );
     const { beaconIds, beaconSetId: dataFeedId } = await updateBeaconSet(
       api3ServerV1,
@@ -131,10 +147,10 @@ describe('AirseekerRegistry', function () {
     await api3ServerV1.connect(roles.api3ServerV1Manager).setDapiName(dapiName, dataFeedId);
 
     const AirseekerRegistry = await ethers.getContractFactory('AirseekerRegistry', roles.deployer);
-    const airseekerRegistry = await AirseekerRegistry.deploy(roles.owner.address, api3ServerV1.getAddress());
+    const airseekerRegistry = await AirseekerRegistry.deploy(roles.owner!.address, api3ServerV1.getAddress());
     const signedApiUrls = airnodes.map((_, index) => `https://signed-api.airnode${index}.com`);
     for (const [ind, airnode] of airnodes.entries()) {
-      await airseekerRegistry.connect(roles.owner).setSignedApiUrl(airnode.address, signedApiUrls[ind]);
+      await airseekerRegistry.connect(roles.owner).setSignedApiUrl(airnode.address, signedApiUrls[ind]!);
     }
 
     return {
@@ -157,7 +173,7 @@ describe('AirseekerRegistry', function () {
           expect(await airseekerRegistry.MAXIMUM_BEACON_COUNT_IN_SET()).to.equal(MAXIMUM_BEACON_COUNT_IN_SET);
           expect(await airseekerRegistry.MAXIMUM_UPDATE_PARAMETERS_LENGTH()).to.equal(MAXIMUM_UPDATE_PARAMETERS_LENGTH);
           expect(await airseekerRegistry.MAXIMUM_SIGNED_API_URL_LENGTH()).to.equal(MAXIMUM_SIGNED_API_URL_LENGTH);
-          expect(await airseekerRegistry.owner()).to.equal(roles.owner.address);
+          expect(await airseekerRegistry.owner()).to.equal(roles.owner!.address);
           expect(await airseekerRegistry.api3ServerV1()).to.equal(await api3ServerV1.getAddress());
         });
       });
@@ -165,7 +181,7 @@ describe('AirseekerRegistry', function () {
         it('reverts', async function () {
           const { roles } = await helpers.loadFixture(deploy);
           const AirseekerRegistry = await ethers.getContractFactory('AirseekerRegistry', roles.deployer);
-          await expect(AirseekerRegistry.deploy(roles.owner.address, ethers.ZeroAddress)).to.be.revertedWith(
+          await expect(AirseekerRegistry.deploy(roles.owner!.address, ethers.ZeroAddress)).to.be.revertedWith(
             'Api3ServerV1 address zero'
           );
         });
@@ -195,7 +211,7 @@ describe('AirseekerRegistry', function () {
     it('reverts', async function () {
       const { roles, airseekerRegistry } = await helpers.loadFixture(deploy);
       await expect(
-        airseekerRegistry.connect(roles.owner).transferOwnership(roles.randomPerson.address)
+        airseekerRegistry.connect(roles.owner).transferOwnership(roles.randomPerson!.address)
       ).to.be.revertedWith('Ownership cannot be transferred');
     });
   });
@@ -614,11 +630,11 @@ describe('AirseekerRegistry', function () {
         context('Data feed is not registered', function () {
           it('registers data feed', async function () {
             const { roles, airnodes, airseekerRegistry } = await helpers.loadFixture(deploy);
-            const templateId = deriveTemplateId(`OIS title of Airnode with address ${airnodes[0].address}`, 'ETH/USD');
-            const beaconId = deriveBeaconId(airnodes[0].address, templateId);
+            const templateId = deriveTemplateId(`OIS title of Airnode with address ${airnodes[0]!.address}`, 'ETH/USD');
+            const beaconId = deriveBeaconId(airnodes[0]!.address, templateId);
             const dataFeedDetails = ethers.AbiCoder.defaultAbiCoder().encode(
               ['address', 'bytes32'],
-              [airnodes[0].address, templateId]
+              [airnodes[0]!.address, templateId]
             );
             expect(await airseekerRegistry.dataFeedIdToDetails(beaconId)).to.equal('0x');
             expect(await airseekerRegistry.dataFeedIsRegistered(beaconId)).to.equal(false);
@@ -635,11 +651,11 @@ describe('AirseekerRegistry', function () {
         context('Data feed is already registered', function () {
           it('does nothing', async function () {
             const { roles, airnodes, airseekerRegistry } = await helpers.loadFixture(deploy);
-            const templateId = deriveTemplateId(`OIS title of Airnode with address ${airnodes[0].address}`, 'ETH/USD');
-            const beaconId = deriveBeaconId(airnodes[0].address, templateId);
+            const templateId = deriveTemplateId(`OIS title of Airnode with address ${airnodes[0]!.address}`, 'ETH/USD');
+            const beaconId = deriveBeaconId(airnodes[0]!.address, templateId);
             const dataFeedDetails = ethers.AbiCoder.defaultAbiCoder().encode(
               ['address', 'bytes32'],
-              [airnodes[0].address, templateId]
+              [airnodes[0]!.address, templateId]
             );
             await airseekerRegistry.connect(roles.randomPerson).registerDataFeed(dataFeedDetails);
             expect(
@@ -691,7 +707,7 @@ describe('AirseekerRegistry', function () {
                         return { ...beacon, beaconId: deriveBeaconId(beacon.airnodeAddress, beacon.templateId) };
                       });
                     const beaconSetId = deriveBeaconSetId(
-                      beacons.reduce((acc, beacon) => {
+                      beacons.reduce((acc: string[], beacon) => {
                         return [...acc, beacon.beaconId];
                       }, [])
                     );
@@ -728,7 +744,7 @@ describe('AirseekerRegistry', function () {
                         return { ...beacon, beaconId: deriveBeaconId(beacon.airnodeAddress, beacon.templateId) };
                       });
                     const beaconSetId = deriveBeaconSetId(
-                      beacons.reduce((acc, beacon) => {
+                      beacons.reduce((acc: string[], beacon: any) => {
                         return [...acc, beacon.beaconId];
                       }, [])
                     );
@@ -791,7 +807,7 @@ describe('AirseekerRegistry', function () {
                   ['address[]', 'bytes32[]'],
                   [
                     beacons.map((beacon) => beacon.airnodeAddress),
-                    [beacons[0].templateId, ...beacons.map((beacon) => beacon.templateId)],
+                    [beacons[0]!.templateId, ...beacons.map((beacon) => beacon.templateId)],
                   ]
                 );
                 await expect(
@@ -853,10 +869,10 @@ describe('AirseekerRegistry', function () {
           await expect(airseekerRegistry.connect(roles.randomPerson).registerDataFeed('0x')).to.be.revertedWith(
             'Data feed details too short'
           );
-          const templateId = deriveTemplateId(`OIS title of Airnode with address ${airnodes[0].address}`, 'ETH/USD');
+          const templateId = deriveTemplateId(`OIS title of Airnode with address ${airnodes[0]!.address}`, 'ETH/USD');
           const dataFeedDetails = ethers.AbiCoder.defaultAbiCoder().encode(
             ['address', 'bytes32'],
-            [airnodes[0].address, templateId]
+            [airnodes[0]!.address, templateId]
           );
           await expect(
             airseekerRegistry.connect(roles.randomPerson).registerDataFeed(`${dataFeedDetails}00`)
@@ -901,13 +917,13 @@ describe('AirseekerRegistry', function () {
               const { roles, airnodes, api3ServerV1, airseekerRegistry, signedApiUrls } =
                 await helpers.loadFixture(deploy);
               const templateId = deriveTemplateId(
-                `OIS title of Airnode with address ${airnodes[0].address}`,
+                `OIS title of Airnode with address ${airnodes[0]!.address}`,
                 'ETH/USD'
               );
-              const beaconId = deriveBeaconId(airnodes[0].address, templateId);
+              const beaconId = deriveBeaconId(airnodes[0]!.address, templateId);
               const dataFeedDetails = ethers.AbiCoder.defaultAbiCoder().encode(
                 ['address', 'bytes32'],
-                [airnodes[0].address, templateId]
+                [airnodes[0]!.address, templateId]
               );
               await airseekerRegistry.connect(roles.owner).setDataFeedIdToBeActivated(beaconId);
               const updateParameters = encodeUpdateParameters(1_000_000, 0, 24 * 60 * 60);
@@ -978,13 +994,13 @@ describe('AirseekerRegistry', function () {
               const { roles, airnodes, api3ServerV1, airseekerRegistry, signedApiUrls } =
                 await helpers.loadFixture(deploy);
               const templateId = deriveTemplateId(
-                `OIS title of Airnode with address ${airnodes[0].address}`,
+                `OIS title of Airnode with address ${airnodes[0]!.address}`,
                 'ETH/USD'
               );
-              const beaconId = deriveBeaconId(airnodes[0].address, templateId);
+              const beaconId = deriveBeaconId(airnodes[0]!.address, templateId);
               const dataFeedDetails = ethers.AbiCoder.defaultAbiCoder().encode(
                 ['address', 'bytes32'],
-                [airnodes[0].address, templateId]
+                [airnodes[0]!.address, templateId]
               );
               await airseekerRegistry.connect(roles.owner).setDataFeedIdToBeActivated(beaconId);
               await airseekerRegistry.registerDataFeed(dataFeedDetails);
@@ -1064,13 +1080,13 @@ describe('AirseekerRegistry', function () {
                 const { roles, airnodes, api3ServerV1, dapiName, airseekerRegistry, signedApiUrls } =
                   await helpers.loadFixture(deploy);
                 const templateId = deriveTemplateId(
-                  `OIS title of Airnode with address ${airnodes[0].address}`,
+                  `OIS title of Airnode with address ${airnodes[0]!.address}`,
                   'ETH/USD'
                 );
-                const beaconId = deriveBeaconId(airnodes[0].address, templateId);
+                const beaconId = deriveBeaconId(airnodes[0]!.address, templateId);
                 const dataFeedDetails = ethers.AbiCoder.defaultAbiCoder().encode(
                   ['address', 'bytes32'],
-                  [airnodes[0].address, templateId]
+                  [airnodes[0]!.address, templateId]
                 );
                 await api3ServerV1.connect(roles.api3ServerV1Manager).setDapiName(dapiName, beaconId);
                 await airseekerRegistry.connect(roles.owner).setDapiNameToBeActivated(dapiName);
@@ -1151,13 +1167,13 @@ describe('AirseekerRegistry', function () {
                 const { roles, airnodes, api3ServerV1, dataFeedId, dapiName, airseekerRegistry, signedApiUrls } =
                   await helpers.loadFixture(deploy);
                 const templateId = deriveTemplateId(
-                  `OIS title of Airnode with address ${airnodes[0].address}`,
+                  `OIS title of Airnode with address ${airnodes[0]!.address}`,
                   'ETH/USD'
                 );
-                const beaconId = deriveBeaconId(airnodes[0].address, templateId);
+                const beaconId = deriveBeaconId(airnodes[0]!.address, templateId);
                 const dataFeedDetails = ethers.AbiCoder.defaultAbiCoder().encode(
                   ['address', 'bytes32'],
-                  [airnodes[0].address, templateId]
+                  [airnodes[0]!.address, templateId]
                 );
                 await api3ServerV1.connect(roles.api3ServerV1Manager).setDapiName(dapiName, beaconId);
                 await airseekerRegistry.connect(roles.owner).setDapiNameToBeActivated(dapiName);
