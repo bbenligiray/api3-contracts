@@ -1,3 +1,72 @@
 # AirseekerRegistry.sol
 
+All API3 data feeds are served over the [Api3ServerV1](./api3serverv1.md) contract.
+[Airseeker](../infrastructure/airseeker.md) is a piece of API3 data feed infrastructure that pushes API provider-signed data to Api3ServerV1 when the conditions specified on AirseekerRegistry are satisfied.
+In other words, AirseekerRegistry is an on-chain configuration file for Airseeker.
+This preferred for two reasons:
 
+- The configuration of data feed infrastructure is security-critical, and should only be updateable by a trustless contract or a multisig.
+  Keeping the configuration on-chain enables this.
+- The configuration being on-chain allows its editing to be integrated with other contracts to streamline updates.
+  For example, [Api3Market](./api3market.md) makes updates to AirseekerRegistry based on user payments.
+
+## How Airseeker uses AirseekerRegistry
+
+Airseeker periodically checks if any of the active data feeds on AirseekerRegistry needs to be updated (according to the on-chain state and respective update parameters), and updates the ones that do.
+`activeDataFeed()` is used for this, which returns all data that Airseeker needs about a data feed with a specific index.
+To reduce the number of RPC calls, Airseeker batches these calls with using `multicall()`.
+The first of these multicalls will include a `activeDataFeedCount()` call, which signals to Airseeker how many multicalls it should make to fetch data for all active data feeds.
+
+In the case that the active data feeds change while Airseeker is making these multicalls, Airseeker may fetch the same feed in two separate batches, or miss a data feed.
+This is accepted behavior, assuming that active data feeds will not change very frequently and Airseeker will run its update loop very frequently (so any missed data feed will be handled on the next iteration).
+
+Let us go over what `activeDataFeed()` returns.
+
+```solidity
+function activeDataFeed(uint256 index)
+    external
+    view
+    returns (
+        bytes32 dataFeedId,
+        bytes32 dapiName,
+        bytes dataFeedDetails,
+        int224 dataFeedValue,
+        uint32 dataFeedTimestamp,
+        int224[] beaconValues,
+        uint32[] beaconTimestamps,
+        bytes updateParameters,
+        string[] signedApiUrls
+    )
+```
+
+`activeDataFeed()` returns `dataFeedId` and `dapiName`.
+`dataFeedId` and `dapiName` are not needed for the update functionality, and are only provided for Airseeker logs to be richer.
+`dataFeedDetails` is contract ABI-encoded [Airnode](../infrastructure/airnode.md) address array and template ID array belonging to the [data feed](./api3serverv1.md#data-feeds) identified by `dataFeedId`.
+When a signed API is called through the URL `$SIGNED_API_IRL/AIRNODE_ADDRESS`, it returns an array of signed data keyed by template IDs.
+Therefore, `dataFeedDetails` is all Airseeker needs to fetch the signed data it will use to update the data feed if necessary.
+
+`dataFeedValue` and `dataFeedTimestamp` are the current values of the data feed identified by `dataFeedId`.
+These values are compared with the aggregation of the values returned by the signed APIs to determine if an update is necessary.
+`beaconValues` and `beaconTimestamps` are the current values of the constituent [Beacons](./api3serverv1.md#beacon) of the data feed identified by `dataFeedId`.
+Airseeker updates data feeds through a multicall of individual calls that update each underlying Beacon, followed by a call that updates the Beacon set using the Beacon.
+Having the Beacon readings allows Airseeker to predict the outcome of the individual Beacon updates and omit them as necessary (e.g., if the on-chain Beacon value is fresher than what the signed API returns, which guarantees that that Beacon update will revert).
+
+`updateParameters` is contract ABI-encoded update parameters in a format that Airseeker recognizes.
+Currently, the only format used is
+
+```solidity
+abi.encode(deviationThresholdInPercentage, deviationReference, heartbeatInterval)
+```
+
+where
+
+- `deviationThresholdInPercentage`(`uint256`): The minimum deviation in percentage that warrants a data feed update.
+  `1e8` corresponds to `100%`.
+- `deviationReference`(`int224`): The reference value against which deviation will be calculated.
+- `heartbeatInterval` (`uint256`): The minimum data feed update age that warrants a data feed update.
+  Specified in seconds.
+
+However, AirseekerRegistry is agnostic to this format to be future-compatible to others that may come up.
+
+`signedApiUrls` are a list of signed APIs that correspond to the Airnodes used in the data feed.
+To get the signed data for each Airnode address, Airseeker both uses all signed API URLs specified in its configuration file, and the respective signed API URL that may be returned here.
