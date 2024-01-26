@@ -69,3 +69,25 @@ However, AirseekerRegistry is agnostic to this format to be future-compatible wi
 
 `signedApiUrls` are a list of signed APIs that correspond to the Airnodes used in the data feed.
 To get the signed data for each Airnode address, Airseeker both uses all signed API URLs specified in its configuration file, and the respective signed API URL that may be returned here.
+
+## How to use AirseekerRegistry
+
+AirseekerRegistry is an Ownable contract where the owner cannot transfer or renounce the ownership.
+The owner is responsible with leaving the state of this contract in a way that Airseeker expects.
+Otherwise, Airseeker behavior is not defined (but it can be expected that the respective data feed will not be updated under any condition).
+The points to consider while activating a data feed name are as follow:
+
+- If a dAPI name is being used, it should be set at [Api3ServerV1](./api3serverv1.md)
+- The data feed should be registered by calling `registerDataFeed()`.
+  If a dAPI name has been used, this should be repeated whenever the dAPI name is updated.
+- The update parameters of the data feed should be set by calling `setDataFeedIdUpdateParameters()` or `setDapiNameUpdateParameters()`
+- The signed API URLs of the respective Airnodes should be set by calling `setSignedApiUrl()`.
+  If a dAPI name has been used, this should be repeated whenever the dAPI name is updated.
+  The signed API URL of an Airnode may change, in which case this should be reflected on AirseekerRegistry by calling `setSignedApiUrl()` again.
+- The respective [sponsor wallet](../specs/airnode-protocol.md#sponsor-wallets) should be funded
+
+Note that some of the steps above imply a need for maintenance (when dAPI names change, signed API URLs change, sponsor wallets run out).
+It is recommended to run automated workers for this purpose, or at least these aspects should be monitored and responsible parties should be alerted when they need to intervene.
+
+In the case that the AirseekerRegistry owner is a contract (e.g., Api3Market), it should be implemented in a way to enforce these, at least partially (e.g., Api3Market does not force the user to set signed API URLs while activating a data feed by buying a subscription).
+In the case that the AirseekerRegistry owner is a multisig or an EOA, either care needs to be taken, or more ideally, a frontend that abstracts these requirements away (by creating a multicall transaction that covers all requirements) should be used.
