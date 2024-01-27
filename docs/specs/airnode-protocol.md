@@ -7,6 +7,11 @@ Some examples are:
 - Publish-subscribe protocol: Airnode receives generic on-chain subscriptions and fulfills them whenever their specified conditions are satisfied
 - Airseeker protocol: _Airnode feed_ pre-emptively pushes signed data to a signed API, and Airseeker periodically fetches this data from the signed API to update on-chain data feeds whenever the specified conditions are satisfied
 
+## Airnode address
+
+All Airnode protocols involve the API provider signing the data with an EOA wallet.
+The address of this wallet is referred to as `airnode` in the contracts and is announced by the respective API provider in their DNS records.
+
 ## Sponsor wallets
 
 Sponsor wallets are derived from the [Airnode](../infrastructure/airnode.md) or [Airseeker](../infrastructure/airseeker.md) mnemonic in a protocol-specific way to provide a specific service.
