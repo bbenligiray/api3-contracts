@@ -576,34 +576,13 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
     {
         bytes32 currentDataFeedId = IApi3ServerV1(api3ServerV1)
             .dapiNameHashToDataFeedId(keccak256(abi.encodePacked(dapiName)));
-        dataFeedDetails = AirseekerRegistry(airseekerRegistry)
-            .dataFeedIdToDetails(currentDataFeedId);
-        (dapiValue, dapiTimestamp) = IApi3ServerV1(api3ServerV1).dataFeeds(
-            currentDataFeedId
-        );
-        if (
-            dataFeedDetails.length == DATA_FEED_DETAILS_LENGTH_FOR_SINGLE_BEACON
-        ) {
-            beaconValues = new int224[](1);
-            beaconTimestamps = new uint32[](1);
-            (address airnode, bytes32 templateId) = abi.decode(
-                dataFeedDetails,
-                (address, bytes32)
-            );
-            (beaconValues[0], beaconTimestamps[0]) = IApi3ServerV1(api3ServerV1)
-                .dataFeeds(deriveBeaconId(airnode, templateId));
-        } else {
-            (address[] memory airnodes, bytes32[] memory templateIds) = abi
-                .decode(dataFeedDetails, (address[], bytes32[]));
-            uint256 beaconCount = airnodes.length;
-            beaconValues = new int224[](beaconCount);
-            beaconTimestamps = new uint32[](beaconCount);
-            for (uint256 ind = 0; ind < beaconCount; ind++) {
-                (beaconValues[ind], beaconTimestamps[ind]) = IApi3ServerV1(
-                    api3ServerV1
-                ).dataFeeds(deriveBeaconId(airnodes[ind], templateIds[ind]));
-            }
-        }
+        (
+            dataFeedDetails,
+            dapiValue,
+            dapiTimestamp,
+            beaconValues,
+            beaconTimestamps
+        ) = getDataFeedData(currentDataFeedId);
         uint256 queueLength = 0;
         for (
             bytes32 queuedSubscriptionId = dapiNameToCurrentSubscriptionId[
@@ -630,6 +609,58 @@ contract Api3Market is HashRegistry, ExtendedSelfMulticall, IApi3Market {
             queuedSubscription = subscriptions[
                 queuedSubscription.nextSubscriptionId
             ];
+        }
+    }
+
+    /// @notice Gets all data about the data feed that is available
+    /// @dev This function is intended to be used by the API3 Market frontend
+    /// to determine what needs to be done to ready the data feed to purchase
+    /// the respective subscription.
+    /// @param dataFeedId Data feed ID
+    /// @return dataFeedDetails Data feed details
+    /// @return dataFeedValue Data feed value read from Api3ServerV1
+    /// @return dataFeedTimestamp Data feed timestamp read from Api3ServerV1
+    /// @return beaconValues Beacon values read from Api3ServerV1
+    /// @return beaconTimestamps Beacon timestamps read from Api3ServerV1
+    function getDataFeedData(
+        bytes32 dataFeedId
+    )
+        public
+        view
+        returns (
+            bytes memory dataFeedDetails,
+            int224 dataFeedValue,
+            uint32 dataFeedTimestamp,
+            int224[] memory beaconValues,
+            uint32[] memory beaconTimestamps
+        )
+    {
+        dataFeedDetails = AirseekerRegistry(airseekerRegistry)
+            .dataFeedIdToDetails(dataFeedId);
+        (dataFeedValue, dataFeedTimestamp) = IApi3ServerV1(api3ServerV1)
+            .dataFeeds(dataFeedId);
+        if (
+            dataFeedDetails.length == DATA_FEED_DETAILS_LENGTH_FOR_SINGLE_BEACON
+        ) {
+            beaconValues = new int224[](1);
+            beaconTimestamps = new uint32[](1);
+            (address airnode, bytes32 templateId) = abi.decode(
+                dataFeedDetails,
+                (address, bytes32)
+            );
+            (beaconValues[0], beaconTimestamps[0]) = IApi3ServerV1(api3ServerV1)
+                .dataFeeds(deriveBeaconId(airnode, templateId));
+        } else {
+            (address[] memory airnodes, bytes32[] memory templateIds) = abi
+                .decode(dataFeedDetails, (address[], bytes32[]));
+            uint256 beaconCount = airnodes.length;
+            beaconValues = new int224[](beaconCount);
+            beaconTimestamps = new uint32[](beaconCount);
+            for (uint256 ind = 0; ind < beaconCount; ind++) {
+                (beaconValues[ind], beaconTimestamps[ind]) = IApi3ServerV1(
+                    api3ServerV1
+                ).dataFeeds(deriveBeaconId(airnodes[ind], templateIds[ind]));
+            }
         }
     }
 

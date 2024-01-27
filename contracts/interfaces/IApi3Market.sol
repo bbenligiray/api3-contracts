@@ -101,6 +101,19 @@ interface IApi3Market is IHashRegistry, IExtendedSelfMulticall {
             uint224[] memory dailyPrices
         );
 
+    function getDataFeedData(
+        bytes32 dataFeedId
+    )
+        external
+        view
+        returns (
+            bytes memory dataFeedDetails,
+            int224 dataFeedValue,
+            uint32 dataFeedTimestamp,
+            int224[] memory beaconValues,
+            uint32[] memory beaconTimestamps
+        );
+
     function subscriptionIdToUpdateParameters(
         bytes32 subscriptionId
     ) external view returns (bytes memory updateParameters);

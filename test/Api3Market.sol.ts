@@ -4308,6 +4308,49 @@ describe('Api3Market', function () {
     });
   });
 
+  describe('getDataFeedData', function () {
+    context('Data feed ID belongs to a Beacon set', function () {
+      it('gets data feed data', async function () {
+        const { roles, api3ServerV1, beaconIds, dataFeedDetails, api3Market, dapiManagementMerkleLeaves } =
+          await helpers.loadFixture(deploy);
+        await api3Market.connect(roles.randomPerson).registerDataFeed(dataFeedDetails);
+        const dataFeedReading = await api3ServerV1.dataFeeds(dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId);
+        const beaconReadings = await readBeacons(api3ServerV1, beaconIds);
+        const dapiData = await api3Market.getDataFeedData(dapiManagementMerkleLeaves.ethUsd!.values.dataFeedId);
+        expect(dapiData.dataFeedDetails).to.equal(dataFeedDetails);
+        expect(dapiData.dataFeedValue).to.equal(dataFeedReading.value);
+        expect(dapiData.dataFeedTimestamp).to.equal(dataFeedReading.timestamp);
+        expect(dapiData.beaconValues).to.deep.equal(beaconReadings.map((beaconReading) => beaconReading.value));
+        expect(dapiData.beaconTimestamps).to.deep.equal(beaconReadings.map((beaconReading) => beaconReading.timestamp));
+      });
+    });
+    context('Data feed ID belongs to a Beacon', function () {
+      it('gets data feed data', async function () {
+        const { roles, airnodes, api3ServerV1, templateIds, api3Market, dapiManagementMerkleLeaves } =
+          await helpers.loadFixture(deploy);
+        const beaconDataFeedDetails = ethers.AbiCoder.defaultAbiCoder().encode(
+          ['address', 'bytes32'],
+          [airnodes[0]!.address, templateIds[0]]
+        );
+        await api3Market.connect(roles.randomPerson).registerDataFeed(beaconDataFeedDetails);
+        const dataFeedReading = await api3ServerV1.dataFeeds(
+          dapiManagementMerkleLeaves.ethUsdWithASingleBeacon!.values.dataFeedId
+        );
+        const beaconReadings = await readBeacons(api3ServerV1, [
+          dapiManagementMerkleLeaves.ethUsdWithASingleBeacon!.values.dataFeedId,
+        ]);
+        const dapiData = await api3Market.getDataFeedData(
+          dapiManagementMerkleLeaves.ethUsdWithASingleBeacon!.values.dataFeedId
+        );
+        expect(dapiData.dataFeedDetails).to.equal(beaconDataFeedDetails);
+        expect(dapiData.dataFeedValue).to.equal(dataFeedReading.value);
+        expect(dapiData.dataFeedTimestamp).to.equal(dataFeedReading.timestamp);
+        expect(dapiData.beaconValues).to.deep.equal(beaconReadings.map((beaconReading) => beaconReading.value));
+        expect(dapiData.beaconTimestamps).to.deep.equal(beaconReadings.map((beaconReading) => beaconReading.timestamp));
+      });
+    });
+  });
+
   describe('subscriptionIdToUpdateParameters', function () {
     context('Subscription exists', function () {
       it('returns the update parameters of the subscription', async function () {
